@@ -1,0 +1,10 @@
+idf_component_register(
+    SRCS
+        "board.c"
+        "cloud_client.c"
+        "command_dispatcher.c"
+        "audio_player.c"
+        "tts_client.c"
+    INCLUDE_DIRS
+        "."
+)
