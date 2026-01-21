@@ -5,6 +5,21 @@ idf_component_register(
         "command_dispatcher.c"
         "audio_player.c"
         "tts_client.c"
+        "wake_word_model.cc"
+        "wake_word_runtime.cc"
     INCLUDE_DIRS
         "."
+    REQUIRES
+        esp-tflite-micro
+        nvs_flash
+        esp_event
+        esp_wifi
+        esp_http_client
+        driver
+        log
+        lwip
+        esp_timer
+        esp_netif
+        json
+        esp-tls
 )

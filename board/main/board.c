@@ -9,6 +9,8 @@
 #include "freertos/task.h"
 #include "driver/spi_master.h"
 #include "driver/gpio.h"
+#include "driver/i2s_std.h"
+#include <math.h>
 #include "esp_log.h"
 #include "esp_random.h"
 #include "esp_event.h"
@@ -26,12 +28,18 @@
 #include <time.h>
 #include <netdb.h>
 #include <ctype.h>
+#include "esp_http_client.h"
+#include "wake_word_runtime.h"
+#include "esp_tls.h"
+#include "esp_crt_bundle.h"
 #include "cJSON.h"
 #include "cloud_client.h"
 #include "command_dispatcher.h"
 #include "board_status.h"
 #include "audio_player.h"
 #include "tts_client.h"
+#include "wake_word_model.h"
+#include "wake_word_runtime.h"
 
 #define SCREEN_WIDTH   128
 #define SCREEN_HEIGHT  160
@@ -52,6 +60,14 @@
 #define TFT_SCK      8
 #define TFT_MOSI     9
 #define PIN_TOUCH    0
+#if CONFIG_IDF_TARGET_ESP32C3
+#define MIC_I2S_PORT I2S_NUM_0
+#else
+#define MIC_I2S_PORT I2S_NUM_1
+#endif
+#define MIC_I2S_WS   1
+#define MIC_I2S_SCK  4
+#define MIC_I2S_SD   2
 
 #define WIFI_SSID "rara"
 #define WIFI_PASS "123456788"
@@ -59,6 +75,9 @@
 #define MAX_RECONNECT_ATTEMPT 3
 #define MIN_RECONNECT_INTERVAL_MS 10000   // 10 detik
 #define WIFI_STABLE_DELAY_MS 5000
+
+static i2s_chan_handle_t g_rx_handle = NULL;
+static bool g_mic_ready = false;
 
 #define NET_CHECK_INTERVAL_MS 30000
 // End-to-end budget for DNS + TCP connect (keep non-blocking behavior)
@@ -171,6 +190,23 @@ static uint32_t g_ai_anim_last = 0;
 // Auto-send hello (once per boot)
 static bool g_autosend_hello_sent = false;
 static bool g_ai_agent_started = false;
+
+typedef enum {
+    PIPE_IDLE = 0,
+    PIPE_LISTENING,
+    PIPE_STT,
+    PIPE_CHAT,
+    PIPE_TTS,
+    PIPE_ERROR
+} pipe_stage_t;
+
+static bool g_pipeline_active = false;
+static pipe_stage_t g_pipe_stage = PIPE_IDLE;
+static char g_pipe_stt_text[256] = {0};
+static char g_pipe_answer[256] = {0};
+static TaskHandle_t g_pipe_task = NULL;
+static int16_t *g_audio_buf = NULL;
+static size_t g_audio_buf_samples = 0;
 
 face_state_t board_get_face_state(void)
 {
@@ -513,6 +549,325 @@ void board_clear_ai_text(void)
     g_ai_dirty = true;
 }
 
+// -------- Audio Capture (INMP441) --------
+
+static void mic_release(void)
+{
+    if (g_rx_handle) {
+        i2s_channel_disable(g_rx_handle);
+        i2s_del_channel(g_rx_handle);
+        g_rx_handle = NULL;
+    }
+    g_mic_ready = false;
+}
+
+static esp_err_t mic_init(void)
+{
+    if (g_mic_ready) return ESP_OK;
+
+    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
+    chan_cfg.dma_desc_num = 2;
+    chan_cfg.dma_frame_num = 120;
+
+    esp_err_t err = i2s_new_channel(&chan_cfg, NULL, &g_rx_handle);
+    if (err != ESP_OK) {
+        ESP_LOGE("MIC", "i2s_new_channel fail %d", err);
+        return err;
+    }
+
+    i2s_std_config_t std_cfg = {
+        .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(16000),
+        .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO),
+        .gpio_cfg = {
+            .mclk = I2S_GPIO_UNUSED,
+            .bclk = MIC_I2S_SCK,
+            .ws = MIC_I2S_WS,
+            .dout = I2S_GPIO_UNUSED,
+            .din = MIC_I2S_SD,
+            .invert_flags = {
+                .mclk_inv = false,
+                .bclk_inv = false,
+                .ws_inv = false,
+            },
+        },
+    };
+
+    err = i2s_channel_init_std_mode(g_rx_handle, &std_cfg);
+    if (err != ESP_OK) {
+        ESP_LOGE("MIC", "i2s_init_std fail %d", err);
+        mic_release();
+        return err;
+    }
+
+    err = i2s_channel_enable(g_rx_handle);
+    if (err != ESP_OK) {
+        ESP_LOGE("MIC", "i2s_enable fail %d", err);
+        mic_release();
+        return err;
+    }
+
+    g_mic_ready = true;
+    return ESP_OK;
+}
+
+static esp_err_t mic_capture(int16_t *buf, size_t samples, size_t *out_bytes, uint32_t *dur_ms)
+{
+    if (!buf || samples == 0) return ESP_ERR_INVALID_ARG;
+    esp_err_t err = mic_init();
+    if (err != ESP_OK) return err;
+
+    size_t target_bytes = samples * sizeof(int16_t);
+    size_t filled_bytes = 0;
+    int64_t start_us = esp_timer_get_time();
+
+    int32_t raw_buffer[64];
+    size_t bytes_read = 0;
+    
+    int16_t max_peak = 0;
+    double rms_sum = 0;
+    int samples_count = 0;
+
+    while (filled_bytes < target_bytes) {
+        esp_err_t err_read = i2s_channel_read(g_rx_handle, raw_buffer, sizeof(raw_buffer), &bytes_read, pdMS_TO_TICKS(200));
+        if (err_read != ESP_OK) {
+             ESP_LOGW("MIC", "Read fail 0x%x", err_read);
+             break;
+        }
+
+        size_t int32_count = bytes_read / sizeof(int32_t);
+
+        // Stereo: L, R, L, R...
+        for (size_t i = 0; i < int32_count; i += 2) {
+             if (filled_bytes >= target_bytes) break;
+
+             // Use Left channel (i). Skip Right (i+1).
+             int32_t val = raw_buffer[i];
+             // Shift >> 14 for 24-bit INMP441 in 32-bit slot
+             int16_t s = (int16_t)(val >> 14);
+             
+             buf[filled_bytes / 2] = s;
+             filled_bytes += 2;
+             
+             if (abs(s) > max_peak) max_peak = abs(s);
+             rms_sum += (double)s * s;
+             samples_count++;
+        }
+    }
+    
+    int16_t rms = 0;
+    if (samples_count > 0) rms = (int16_t)sqrt(rms_sum / samples_count);
+
+    ESP_LOGI("MIC", "Read %d bytes. Peak: %d, RMS: %d", (int)filled_bytes, max_peak, rms);
+    
+    if (filled_bytes >= 20) {
+        ESP_LOGI("MIC", "Samples: %d %d %d %d %d %d %d %d %d %d", 
+           buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7], buf[8], buf[9]);
+    }
+
+    if (out_bytes) *out_bytes = filled_bytes;
+    if (dur_ms) {
+        *dur_ms = (uint32_t)((esp_timer_get_time() - start_us) / 1000);
+    }
+    
+    mic_release();
+    return (filled_bytes > 0) ? ESP_OK : ESP_FAIL;
+}
+
+// -------- STT Client --------
+typedef enum {
+    STT_FAIL_NONE = 0,
+    STT_FAIL_HTTP,
+    STT_FAIL_JSON,
+    STT_FAIL_EMPTY
+} stt_fail_stage_t;
+
+typedef struct {
+    int status_code;
+    int bytes;
+    stt_fail_stage_t fail_stage;
+    int fail_errno;
+    char fail_msg[64];
+} stt_request_result_t;
+
+static bool stt_send_buffer(const int16_t *pcm, size_t samples, char *text_out, size_t text_out_len, stt_request_result_t *res)
+{
+    if (res) {
+        memset(res, 0, sizeof(*res));
+        res->status_code = -1;
+        res->fail_stage = STT_FAIL_NONE;
+    }
+    if (!pcm || samples == 0 || !text_out || text_out_len == 0) return false;
+
+    const size_t data_bytes = samples * sizeof(int16_t);
+    const size_t wav_header = 44;
+    const size_t total_len = wav_header + data_bytes;
+
+    uint8_t header[44] = {0};
+    memcpy(header, "RIFF", 4);
+    uint32_t chunk_size = (uint32_t)(total_len - 8);
+    header[4] = chunk_size & 0xFF;
+    header[5] = (chunk_size >> 8) & 0xFF;
+    header[6] = (chunk_size >> 16) & 0xFF;
+    header[7] = (chunk_size >> 24) & 0xFF;
+    memcpy(header + 8, "WAVEfmt ", 8);
+    header[16] = 16; // PCM fmt chunk size
+    header[20] = 1; header[21] = 0; // PCM
+    header[22] = 1; header[23] = 0; // mono
+    header[24] = 0x80; header[25] = 0x3E; // 16000
+    header[26] = 0x00; header[27] = 0x00;
+    uint32_t byte_rate = 16000 * 2;
+    header[28] = byte_rate & 0xFF;
+    header[29] = (byte_rate >> 8) & 0xFF;
+    header[30] = (byte_rate >> 16) & 0xFF;
+    header[31] = (byte_rate >> 24) & 0xFF;
+    header[32] = 2; header[33] = 0; // block align
+    header[34] = 16; header[35] = 0; // bits
+    memcpy(header + 36, "data", 4);
+    header[40] = data_bytes & 0xFF;
+    header[41] = (data_bytes >> 8) & 0xFF;
+    header[42] = (data_bytes >> 16) & 0xFF;
+    header[43] = (data_bytes >> 24) & 0xFF;
+
+    esp_http_client_config_t cfg = {
+        .url = "https://rbots.dev/speech-to-text",
+        .method = HTTP_METHOD_POST,
+        .crt_bundle_attach = esp_crt_bundle_attach,
+        .transport_type = HTTP_TRANSPORT_OVER_SSL,
+        .timeout_ms = 20000,
+    };
+
+    esp_http_client_handle_t client = esp_http_client_init(&cfg);
+    if (!client) {
+        if (res) {
+            res->fail_stage = STT_FAIL_HTTP;
+            res->fail_errno = ESP_FAIL;
+        }
+        return false;
+    }
+
+    esp_http_client_set_header(client, "Content-Type", "audio/wav; codecs=audio/pcm; samplerate=16000");
+
+    bool lock = net_http_lock_take(20000);
+    if (!lock) {
+        esp_http_client_cleanup(client);
+        if (res) {
+            res->fail_stage = STT_FAIL_HTTP;
+            res->fail_errno = ESP_ERR_INVALID_STATE;
+            snprintf(res->fail_msg, sizeof(res->fail_msg), "lock busy");
+        }
+        return false;
+    }
+
+    ESP_LOGI("STT", "dns host=rbots.dev");
+
+    esp_err_t err = esp_http_client_open(client, total_len);
+    if (err != ESP_OK) {
+        if (res) {
+            res->fail_stage = STT_FAIL_HTTP;
+            res->fail_errno = err;
+        }
+        net_http_lock_give();
+        esp_http_client_cleanup(client);
+        ESP_LOGE("STT", "tcp/tls open fail err=%d", err);
+        return false;
+    }
+    ESP_LOGI("STT", "tcp ok");
+    ESP_LOGI("STT", "tls ok");
+
+    int written = esp_http_client_write(client, (const char *)header, wav_header);
+    if (written != (int)wav_header) {
+        net_http_lock_give();
+        esp_http_client_cleanup(client);
+        if (res) {
+            res->fail_stage = STT_FAIL_HTTP;
+            res->fail_errno = ESP_FAIL;
+        }
+        ESP_LOGE("STT", "write header fail");
+        return false;
+    }
+
+    const uint8_t *pcm_bytes = (const uint8_t *)pcm;
+    size_t remaining = data_bytes;
+    while (remaining > 0) {
+        size_t chunk = remaining > 2048 ? 2048 : remaining;
+        int w = esp_http_client_write(client, (const char *)pcm_bytes + (data_bytes - remaining), chunk);
+        if (w <= 0) {
+            net_http_lock_give();
+            esp_http_client_cleanup(client);
+            if (res) {
+                res->fail_stage = STT_FAIL_HTTP;
+                res->fail_errno = ESP_FAIL;
+            }
+            ESP_LOGE("STT", "write data fail");
+            return false;
+        }
+        remaining -= (size_t)w;
+    }
+
+    int64_t cl = esp_http_client_fetch_headers(client);
+    int status = esp_http_client_get_status_code(client);
+    if (res) res->status_code = status;
+    ESP_LOGI("STT", "http status=%d cl=%lld", status, (long long)cl);
+
+    char resp[512] = {0};
+    int read = esp_http_client_read_response(client, resp, sizeof(resp) - 1);
+    if (read < 0) read = 0;
+    resp[read] = '\0';
+    ESP_LOGI("STT", "body_len=%d", read);
+    ESP_LOGI("STT", "body_preview=\"%.*s\"", read > 120 ? 120 : read, resp);
+    
+    if (status != 200) {
+        int sock_errno = esp_http_client_get_errno(client);
+        if (res) {
+            res->fail_stage = STT_FAIL_HTTP;
+            res->fail_errno = status;
+            snprintf(res->fail_msg, sizeof(res->fail_msg), "status %d body=%.*s", status, read > 80 ? 80 : read, resp);
+        }
+        ESP_LOGE("STT", "HTTP status=%d sock_errno=%d", status, sock_errno);
+        ESP_LOGE("PIPE", "stage=S2_STT fail reason=\"http_%d\" status=%d sock_errno=%d", status, status, sock_errno);
+        net_http_lock_give();
+        esp_http_client_close(client);
+        esp_http_client_cleanup(client);
+        return false;
+    }
+
+    cJSON *root = cJSON_Parse(resp);
+    if (!root) {
+        if (res) {
+            res->fail_stage = STT_FAIL_JSON;
+            res->fail_errno = ESP_FAIL;
+        }
+        net_http_lock_give();
+        esp_http_client_close(client);
+        esp_http_client_cleanup(client);
+        ESP_LOGE("STT", "json parse fail");
+        return false;
+    }
+    const cJSON *text = cJSON_GetObjectItem(root, "text");
+    const char *val = cJSON_IsString(text) ? text->valuestring : NULL;
+    if (!val || val[0] == '\0') {
+        if (res) {
+            res->fail_stage = STT_FAIL_EMPTY;
+            res->fail_errno = ESP_FAIL;
+        }
+        cJSON_Delete(root);
+        net_http_lock_give();
+        esp_http_client_close(client);
+        esp_http_client_cleanup(client);
+        ESP_LOGE("STT", "missing field 'text' or empty");
+        ESP_LOGE("PIPE", "stage=S2_STT fail reason=\"missing_text\" json=\"%.*s\"", read > 100 ? 100 : read, resp);
+        return false;
+    }
+    strncpy(text_out, val, text_out_len - 1);
+    text_out[text_out_len - 1] = '\0';
+    cJSON_Delete(root);
+    net_http_lock_give();
+    esp_http_client_close(client);
+    esp_http_client_cleanup(client);
+    // Text logging moved to pipe_task after this function returns
+    return true;
+}
+
 float battery_get_voltage(void)
 {
     return 3.9f;
@@ -707,7 +1062,7 @@ static void tft_fill_rect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16
     
     // Use a larger buffer for faster fills
     const size_t buf_size = 256;
-    uint8_t *line_buf = malloc(buf_size * 2);
+    uint8_t line_buf[512]; // Stack allocated to avoid OOM/fragmentation
     for(int i=0; i<buf_size; i++) {
         line_buf[i*2] = px[0];
         line_buf[i*2+1] = px[1];
@@ -718,7 +1073,6 @@ static void tft_fill_rect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16
         st7735_send_data(line_buf, batch * 2);
         total -= batch;
     }
-    free(line_buf);
 }
 
 static void tft_fill_screen(uint16_t color)
@@ -1241,6 +1595,7 @@ done:
 
 static void ai_agent_tick(void)
 {
+    if (g_pipeline_active) return;
     if (g_autosend_hello_sent || g_ai_agent_started) return;
     if (g_net_state != NET_ONLINE || !board_can_network()) return;
 
@@ -1253,6 +1608,7 @@ static void ai_agent_tick(void)
 
 static void chat_engine_tick(void)
 {
+    if (g_pipeline_active) return;
     static char prompt_buffer[128];
     switch (g_chat_state) {
         case CHAT_IDLE:
@@ -1348,6 +1704,200 @@ static void ai_overlay_tick(uint32_t now_ticks)
     if (g_ai_dirty) {
         g_ai_dirty = false;
         tft_draw_ai_overlay(g_ai_state, g_ai_text, g_ai_anim_phase);
+    }
+}
+
+// -------- AI Pipeline (Audio -> STT -> Chat -> TTS) --------
+#define PIPE_CAPTURE_SEC 1 // Reduced from 2s to 1s to save RAM
+//#define PIPE_CAPTURE_SEC 2
+#define PIPE_SAMPLE_RATE 16000
+
+static void pipe_fail(const char *stage, const char *reason, int code)
+{
+    g_pipeline_active = false;
+    g_pipe_stage = PIPE_IDLE;
+    ESP_LOGE("PIPE", "fail stage=%s reason=%s code=%d", stage ? stage : "?", reason ? reason : "?", code);
+    board_set_ai_state(AI_ERROR);
+    board_set_ai_text("COBA LAGI YA~", 4000);
+}
+
+static void pipe_task(void *arg)
+{
+    (void)arg;
+    g_pipeline_active = true;
+    g_pipe_stage = PIPE_LISTENING;
+    board_set_ai_state(AI_LISTENING);
+    board_set_ai_text(NULL, 0);
+    
+    // Wait for previous TTS (HTTP + playback) to complete before starting capture
+    int wait_count = 0;
+    while ((tts_client_is_busy() || audio_player_is_playing()) && wait_count < 80) {
+        ESP_LOGI("PIPE", "waiting for TTS to finish... (%d/80)", wait_count + 1);
+        vTaskDelay(pdMS_TO_TICKS(100));
+        wait_count++;
+    }
+    if (tts_client_is_busy() || audio_player_is_playing()) {
+        ESP_LOGW("PIPE", "timeout waiting for TTS, skip capture");
+        g_pipeline_active = false;
+        g_pipe_task = NULL;
+        vTaskDelete(NULL);
+        return;
+    }
+    
+    size_t samples = PIPE_CAPTURE_SEC * PIPE_SAMPLE_RATE;
+    size_t expected_bytes = samples * sizeof(int16_t);
+    ESP_LOGI("AIUI", "state=A1_LISTENING");
+    ESP_LOGI("PIPE", "stage=S1_CAPTURE start dur_ms=%u sr=%u ch=1 bps=16 expected_bytes=%u", 
+             (unsigned)(PIPE_CAPTURE_SEC * 1000), (unsigned)PIPE_SAMPLE_RATE, (unsigned)expected_bytes);
+    if (!g_audio_buf || g_audio_buf_samples < samples) {
+        free(g_audio_buf);
+        g_audio_buf = (int16_t *)malloc(samples * sizeof(int16_t));
+        g_audio_buf_samples = g_audio_buf ? samples : 0;
+    }
+    if (!g_audio_buf) {
+        pipe_fail("S1_CAPTURE", "alloc", ESP_ERR_NO_MEM);
+        g_pipe_task = NULL;
+        vTaskDelete(NULL);
+        return;
+    }
+
+    size_t captured_bytes = 0;
+    uint32_t dur_ms = 0;
+    if (mic_capture(g_audio_buf, samples, &captured_bytes, &dur_ms) != ESP_OK || captured_bytes == 0) {
+        pipe_fail("S1_CAPTURE", "mic_fail", ESP_FAIL);
+        g_pipe_task = NULL;
+        vTaskDelete(NULL);
+        return;
+    }
+    
+    // Optional audio signal analysis for debugging
+    int64_t sum = 0;
+    int32_t peak = 0;
+    int zero_count = 0;
+    size_t captured_samples = captured_bytes / sizeof(int16_t);
+    // Sample every 16th frame to reduce CPU load
+    for (size_t i = 0; i < captured_samples; i += 16) {
+        int16_t val = g_audio_buf[i];
+        sum += (int64_t)val;
+        int32_t abs_val = val < 0 ? -val : val;
+        if (abs_val > peak) peak = abs_val;
+        if (val == 0) zero_count++;
+    }
+    int32_t dc_offset = (int32_t)(sum / (int64_t)(captured_samples / 16));
+    int32_t rms_approx = peak / 3; // Rough RMS approximation
+    
+    ESP_LOGI("PIPE", "stage=S1_CAPTURE done bytes=%u ms=%u", (unsigned)captured_bytes, (unsigned)dur_ms);
+    ESP_LOGI("MIC", "rms=%d peak=%d dc=%d zeros=%d/%u", 
+             (int)rms_approx, (int)peak, (int)dc_offset, zero_count, (unsigned)(captured_samples / 16));
+
+    if (!board_can_network()) {
+        pipe_fail("S2_STT", "net_gate", ESP_ERR_INVALID_STATE);
+        g_pipe_task = NULL;
+        vTaskDelete(NULL);
+        return;
+    }
+
+    g_pipe_stage = PIPE_STT;
+    board_set_ai_state(AI_THINKING);
+    ESP_LOGI("AIUI", "state=A2_THINKING");
+    stt_request_result_t stt_res;
+    memset(g_pipe_stt_text, 0, sizeof(g_pipe_stt_text));
+    ESP_LOGI("PIPE", "stage=S2_STT start wav_bytes=%u", (unsigned)(captured_bytes + 44));
+    if (!stt_send_buffer(g_audio_buf, captured_bytes / 2, g_pipe_stt_text, sizeof(g_pipe_stt_text), &stt_res)) {
+        pipe_fail("S2_STT", stt_res.fail_msg[0] ? stt_res.fail_msg : "stt_fail", stt_res.fail_errno);
+        // Backoff to prevent spam on repeated failures
+        vTaskDelay(pdMS_TO_TICKS(2000));
+        g_pipe_task = NULL;
+        vTaskDelete(NULL);
+        return;
+    }
+    
+    // Log STT success with transcript
+    size_t text_len = strlen(g_pipe_stt_text);
+    ESP_LOGI("STT", "text=\"%.*s\"", text_len > 200 ? 200 : (int)text_len, g_pipe_stt_text);
+    ESP_LOGI("PIPE", "stage=S2_STT ok text_len=%u", (unsigned)text_len);
+    
+    // Optional: Show on TFT briefly (truncate to 48 chars)
+    if (text_len > 0) {
+        char preview[52];
+        if (text_len > 48) {
+            snprintf(preview, sizeof(preview), "%.48s...", g_pipe_stt_text);
+        } else {
+            strncpy(preview, g_pipe_stt_text, sizeof(preview) - 1);
+            preview[sizeof(preview) - 1] = '\0';
+        }
+        board_set_ai_text(preview, 3000);
+        ESP_LOGI("AIUI", "stt_preview_len=%u", (unsigned)strlen(preview));
+    }
+
+    // Free audio buffer after STT to reclaim ~96KB for TLS operations
+    free(g_audio_buf);
+    g_audio_buf = NULL;
+    g_audio_buf_samples = 0;
+
+    g_pipe_stage = PIPE_CHAT;
+    ESP_LOGI("PIPE", "stage=S3_CHAT start");
+    if (!board_can_network()) {
+        pipe_fail("S3_CHAT", "net_gate", ESP_ERR_INVALID_STATE);
+        g_pipe_task = NULL;
+        vTaskDelete(NULL);
+        return;
+    }
+    chat_request_result_t chat_res;
+    memset(&chat_res, 0, sizeof(chat_res));
+    memset(g_pipe_answer, 0, sizeof(g_pipe_answer));
+    if (cloud_client_chat_gradient(g_pipe_stt_text, g_pipe_answer, sizeof(g_pipe_answer), &chat_res) != ESP_OK ||
+        g_pipe_answer[0] == '\0') {
+        pipe_fail("S3_CHAT", chat_res.fail_msg[0] ? chat_res.fail_msg : "chat_fail", chat_res.fail_errno);
+        g_pipe_task = NULL;
+        vTaskDelete(NULL);
+        return;
+    }
+    ESP_LOGI("CHAT", "answer_len=%d preview=\"%.*s\"", (int)strlen(g_pipe_answer),
+             (int)(strlen(g_pipe_answer) > 80 ? 80 : strlen(g_pipe_answer)), g_pipe_answer);
+
+    g_pipe_stage = PIPE_TTS;
+    ESP_LOGI("PIPE", "stage=S4_TTS start");
+    if (!board_can_network()) {
+        pipe_fail("S4_TTS", "net_gate", ESP_ERR_INVALID_STATE);
+        g_pipe_task = NULL;
+        vTaskDelete(NULL);
+        return;
+    }
+    board_set_ai_state(AI_ANSWERING);
+    tts_stream_result_t tts_res;
+    esp_err_t tts_err = tts_client_stream_play(g_pipe_answer, &tts_res);
+    if (tts_err != ESP_OK) {
+        pipe_fail("S4_TTS", tts_res.fail_msg[0] ? tts_res.fail_msg : "tts_fail", tts_res.fail_errno);
+        g_pipe_task = NULL;
+        vTaskDelete(NULL);
+        return;
+    }
+
+    board_set_ai_state(AI_IDLE);
+    g_pipeline_active = false;
+    g_pipe_stage = PIPE_IDLE;
+    ESP_LOGI("PIPE", "done");
+    g_pipe_task = NULL;
+    vTaskDelete(NULL);
+}
+
+static void pipe_trigger_once(void)
+{
+    if (g_pipeline_active || g_pipe_task) return;
+    if (!board_can_network()) return;
+    
+    // Block new pipeline if TTS is still busy to prevent I2S port conflict
+    if (tts_client_is_busy() || audio_player_is_playing()) {
+        ESP_LOGW("PIPE", "blocked: TTS busy");
+        return;
+    }
+    
+    g_pipe_stage = PIPE_IDLE;
+    BaseType_t ok = xTaskCreate(pipe_task, "pipe_task", 8192, NULL, 5, &g_pipe_task);
+    if (ok != pdPASS) {
+        g_pipe_task = NULL;
+        ESP_LOGE("PIPE", "task create failed");
     }
 }
 
@@ -1910,6 +2460,8 @@ static bool wifi_manager_init(void)
 void app_main(void)
 {
     ESP_LOGI(TAG_STATE, "BOOT");
+    printf("=== Wake Word Model Test ===\n");
+    printf("Model size: %d bytes\n", halo_rbot_tflite_len);
 
     if (!tft_init()) {
         while (1) vTaskDelay(pdMS_TO_TICKS(1000));
@@ -1920,6 +2472,9 @@ void app_main(void)
     if (audio_player_init() != ESP_OK) {
         ESP_LOGE(TAG_FEATURE, "Audio init failed");
     }
+
+    // Wake word engine bring-up (TFLM AllocateTensors)
+    wake_word_engine_init();
 
     wifi_manager_init(); // state must be determined by Wi-Fi/IP events
     initialize_sntp();
@@ -1956,7 +2511,9 @@ void app_main(void)
     draw_robot_face(state.mood, state.blink, state.off_x, state.off_y, state.off_size);
     ai_overlay_tick(now);
     wifi_overlay_tick(now);
-    net_checker_tick(now);
+    if (!g_pipeline_active) {
+        net_checker_tick(now);
+    }
     battery_overlay_tick(now);
     ESP_LOGI(TAG_STATE, "RUNNING");
 
@@ -2068,9 +2625,12 @@ void app_main(void)
 
         wifi_overlay_tick(now);
         board_wifi_is_stable(); // Ensure stability transition
-        net_checker_tick(now);
-        ai_agent_tick();
-        chat_engine_tick();
+        if (!g_pipeline_active) {
+            net_checker_tick(now);
+            ai_agent_tick();
+            chat_engine_tick();
+            pipe_trigger_once();
+        }
         battery_overlay_tick(now);
         ai_overlay_tick(now);
         vTaskDelay(pdMS_TO_TICKS(30));

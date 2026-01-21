@@ -1,13 +1,12 @@
 #include "audio_player.h"
 
-#include "driver/i2s.h"
+#include "driver/i2s_std.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/ringbuf.h"
 
-#define I2S_PORT I2S_NUM_0
 #define PIN_I2S_WS 1
 #define PIN_I2S_SCK 4
 #define PIN_I2S_DOUT 6
@@ -20,6 +19,7 @@ static const char *TAG_AUDIO = "AUDIO";
 
 static RingbufHandle_t s_audio_rb = NULL;
 static TaskHandle_t s_audio_task = NULL;
+static i2s_chan_handle_t s_tx_handle = NULL;
 static bool s_i2s_ready = false;
 static bool s_started = false;
 
@@ -49,11 +49,18 @@ static void audio_task(void *arg)
 
             size_t bytes_to_write = samples * sizeof(int32_t);
             size_t written = 0;
-            esp_err_t err = i2s_write(I2S_PORT, frame, bytes_to_write, &written, portMAX_DELAY);
-            if (err != ESP_OK) {
-                ESP_LOGE(TAG_AUDIO, "i2s_write fail %d", err);
+            // Use i2s_std channel write
+            if (s_tx_handle) {
+                esp_err_t err = i2s_channel_write(s_tx_handle, frame, bytes_to_write, &written, portMAX_DELAY);
+                if (err != ESP_OK) {
+                    ESP_LOGE(TAG_AUDIO, "i2s_channel_write fail %d", err);
+                    break;
+                }
+            } else {
+                // If handle invalid, just drop or break
                 break;
             }
+
             total_played += written;
             int64_t now = esp_timer_get_time();
             if (now - last_log_us >= 1000000) {
@@ -71,49 +78,43 @@ static void audio_task(void *arg)
 
 static esp_err_t audio_i2s_init(void)
 {
-    if (s_i2s_ready) return ESP_OK;
+    if (s_i2s_ready && s_tx_handle) return ESP_OK;
 
-    i2s_config_t config = {
-        .mode = I2S_MODE_MASTER | I2S_MODE_TX,
-        .sample_rate = 16000,
-        .bits_per_sample = I2S_BITS_PER_SAMPLE_32BIT,
-        .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT,
-        .communication_format = I2S_COMM_FORMAT_STAND_I2S,
-        .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
-        .dma_buf_count = 6,
-        .dma_buf_len = 256,
-        .use_apll = false,
-        .tx_desc_auto_clear = true,
-        .fixed_mclk = -1,
-        .mclk_multiple = I2S_MCLK_MULTIPLE_256,
-        .bits_per_chan = I2S_BITS_PER_CHAN_32BIT
+    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_AUTO, I2S_ROLE_MASTER);
+    esp_err_t err = i2s_new_channel(&chan_cfg, &s_tx_handle, NULL);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG_AUDIO, "i2s_new_channel fail %d", err);
+        return err;
+    }
+
+    i2s_std_config_t std_cfg = {
+        .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(16000),
+        .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_MONO),
+        .gpio_cfg = {
+            .mclk = I2S_GPIO_UNUSED,
+            .bclk = PIN_I2S_SCK,
+            .ws = PIN_I2S_WS,
+            .dout = PIN_I2S_DOUT,
+            .din = I2S_GPIO_UNUSED,
+            .invert_flags = {
+                .mclk_inv = false,
+                .bclk_inv = false,
+                .ws_inv = false,
+            },
+        },
     };
 
-    i2s_pin_config_t pins = {
-        .bck_io_num = PIN_I2S_SCK,
-        .ws_io_num = PIN_I2S_WS,
-        .data_out_num = PIN_I2S_DOUT,
-        .data_in_num = I2S_PIN_NO_CHANGE
-    };
-
-    esp_err_t err = i2s_driver_install(I2S_PORT, &config, 0, NULL);
+    err = i2s_channel_init_std_mode(s_tx_handle, &std_cfg);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG_AUDIO, "i2s_driver_install fail %d", err);
+        ESP_LOGE(TAG_AUDIO, "i2s_channel_init_std_mode fail %d", err);
+        i2s_del_channel(s_tx_handle);
+        s_tx_handle = NULL;
         return err;
     }
 
-    err = i2s_set_pin(I2S_PORT, &pins);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG_AUDIO, "i2s_set_pin fail %d", err);
-        return err;
-    }
-
-    err = i2s_zero_dma_buffer(I2S_PORT);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG_AUDIO, "i2s_zero_dma_buffer fail %d", err);
-        return err;
-    }
-
+    /* Enable moved to start */
+    /* err = i2s_channel_enable(s_tx_handle); */
+    
     s_i2s_ready = true;
     return ESP_OK;
 }
@@ -137,7 +138,7 @@ esp_err_t audio_player_init(void)
         }
     }
 
-    return audio_i2s_init();
+    return ESP_OK;
 }
 
 esp_err_t audio_player_start(uint32_t sample_rate_hz)
@@ -145,23 +146,43 @@ esp_err_t audio_player_start(uint32_t sample_rate_hz)
     esp_err_t err = audio_player_init();
     if (err != ESP_OK) return err;
 
+    // Install I2S driver if not already done
+    err = audio_i2s_init();
+    if (err != ESP_OK) return err;
+
     if (sample_rate_hz == 0) sample_rate_hz = 16000;
-    err = i2s_set_sample_rates(I2S_PORT, sample_rate_hz);
+    
+    // Reconfigure clock if needed (optional optimization: only if changed)
+    i2s_std_clk_config_t clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(sample_rate_hz);
+    err = i2s_channel_reconfig_std_clock(s_tx_handle, &clk_cfg);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG_AUDIO, "set_sample_rates fail %d", err);
+        ESP_LOGE(TAG_AUDIO, "i2s_channel_reconfig_std_clock fail %d", err);
         return err;
     }
-    i2s_zero_dma_buffer(I2S_PORT);
-    i2s_start(I2S_PORT);
-    s_started = true;
+
+    if (!s_started) {
+        err = i2s_channel_enable(s_tx_handle);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG_AUDIO, "i2s_channel_enable fail %d", err);
+            return err;
+        }
+        s_started = true;
+    }
     return ESP_OK;
 }
 
 void audio_player_stop(void)
 {
-    if (!s_i2s_ready) return;
-    i2s_stop(I2S_PORT);
-    s_started = false;
+    if (!s_i2s_ready || !s_tx_handle) return;
+    
+    if (s_started) {
+        i2s_channel_disable(s_tx_handle);
+        s_started = false;
+    }
+    
+    i2s_del_channel(s_tx_handle);
+    s_tx_handle = NULL;
+    s_i2s_ready = false;
 }
 
 void audio_player_flush(void)
@@ -199,4 +220,9 @@ bool audio_player_submit_pcm(const uint8_t *data, size_t len)
         }
     }
     return false;
+}
+
+bool audio_player_is_playing(void)
+{
+    return s_started && s_i2s_ready;
 }

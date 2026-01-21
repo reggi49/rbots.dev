@@ -43,6 +43,7 @@ typedef struct {
 
 static const char *TAG_TTS = "TTS";
 static bool s_busy = false;
+static bool s_streaming = false;
 
 static uint32_t parse_sample_rate(const uint8_t *hdr)
 {
@@ -322,7 +323,17 @@ static esp_err_t tts_stream_internal(const char *text, tts_stream_result_t *resu
 {
     if (!text || text[0] == '\0') return ESP_ERR_INVALID_ARG;
 
+    if (s_streaming) {
+        if (result) {
+            result->fail_stage = TTS_FAIL_HTTP;
+            result->fail_errno = ESP_ERR_INVALID_STATE;
+            snprintf(result->fail_msg, sizeof(result->fail_msg), "busy");
+        }
+        return ESP_ERR_INVALID_STATE;
+    }
+    s_streaming = true;
     if (result) {
+        s_streaming = false;
         result->status_code = -1;
         result->bytes = 0;
         result->data_bytes = 0;
@@ -361,6 +372,7 @@ static esp_err_t tts_stream_internal(const char *text, tts_stream_result_t *resu
     if (!client) {
         free(body);
         free(ctx);
+        s_streaming = false;
         return ESP_FAIL;
     }
 
@@ -390,6 +402,8 @@ static esp_err_t tts_stream_internal(const char *text, tts_stream_result_t *resu
         esp_http_client_cleanup(client);
         free(ctx);
         free(body);
+        s_streaming = false;
+        audio_player_stop();
         return ESP_ERR_INVALID_STATE;
     }
 
@@ -486,6 +500,7 @@ finalize:
     esp_http_client_close(client);
     esp_http_client_cleanup(client);
     free(body);
+    audio_player_stop();
 
     if (err != ESP_OK) {
         if (ctx->fail_stage == TTS_FAIL_HTTP) {
@@ -499,12 +514,14 @@ finalize:
             ESP_LOGE(TAG_TTS, "fail stage=WAV errno=%d msg=invalid", ctx->fail_errno);
         }
         free(ctx);
+        s_streaming = false;
         return ESP_FAIL;
     }
 
     ESP_LOGI(TAG_TTS, "http status=%d", status);
     ESP_LOGI(TAG_TTS, "play done bytes=%u", (unsigned)(ctx->data_bytes ? ctx->data_bytes : ctx->total_bytes));
     free(ctx);
+    s_streaming = false;
     return ESP_OK;
 }
 
@@ -558,5 +575,5 @@ esp_err_t tts_client_speak_async(const char *text)
 
 bool tts_client_is_busy(void)
 {
-    return s_busy;
+    return s_busy || s_streaming;
 }
