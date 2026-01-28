@@ -69,17 +69,26 @@ TfLiteStatus ConvEval(TfLiteContext* context, TfLiteNode* node) {
           const int num_channels = filter->dims->data[kConvQuantizedDimension];
           const int per_channel_size = element_count / num_channels;
           
-          if (data.filter_quantization != nullptr) {
+            if (data.filter_quantization != nullptr) {
                const TfLiteAffineQuantization* quant = (const TfLiteAffineQuantization*)data.filter_quantization;
-               for (int c = 0; c < num_channels; ++c) {
+                 if (quant && quant->scale && quant->zero_point &&
+                   quant->scale->size > 0 && quant->zero_point->size > 0) {
+                 for (int c = 0; c < num_channels; ++c) {
                    float scale = quant->scale->data[c];
                    int32_t zero_point = quant->zero_point->data[c];
                    for (int i = 0; i < per_channel_size; ++i) {
-                       int idx = c * per_channel_size + i;
-                       dequantized_filter[idx] = (filter_data_int8[idx] - zero_point) * scale;
+                     int idx = c * per_channel_size + i;
+                     dequantized_filter[idx] = (filter_data_int8[idx] - zero_point) * scale;
                    }
+                 }
+               } else {
+                 float scale = data.filter_scale;
+                 int32_t zero_point = data.filter_zero_point;
+                 for (int i = 0; i < element_count; ++i) {
+                   dequantized_filter[i] = (filter_data_int8[i] - zero_point) * scale;
+                 }
                }
-          } else {
+            } else {
                float scale = data.filter_scale;
                int32_t zero_point = data.filter_zero_point;
                for (int i = 0; i < element_count; ++i) {

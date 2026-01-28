@@ -1,0 +1,269 @@
+Executing action: all (aliases: build)
+Running ninja in directory /Users/reggi/Downloads/rbot/board/build
+Executing "ninja all"...
+[1/11] Performing build step for 'bootloader'
+[1/1] cd /Users/reggi/Downloads/rbot/board/build/bootloader/esp-idf/esptool_py && /Users/reggi/.espressif/python_env/idf5.5_py3.13_env/bin/python /Users/reggi/.espressif/v5.5.2/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 bootloader 0x0 /Users/reggi/Downloads/rbot/board/build/bootloader/bootloader.bin
+Bootloader binary size 0x5270 bytes. 0x2d90 bytes (36%) free.
+[2/11] No install step for 'bootloader'
+[3/11] Completed 'bootloader'
+[4/11] Building C object esp-idf/main/CMakeFiles/__idf_main.dir/__/src/board_display.c.obj
+FAILED: esp-idf/main/CMakeFiles/__idf_main.dir/__/src/board_display.c.obj 
+/Users/reggi/.espressif/tools/riscv32-esp-elf/esp-14.2.0_20251107/riscv32-esp-elf/bin/riscv32-esp-elf-gcc -DESP_PLATFORM -DIDF_VER=\"v5.5.2-dirty\" -DMBEDTLS_CONFIG_FILE=\"mbedtls/esp_config.h\" -DSOC_MMU_PAGE_SIZE=CONFIG_MMU_PAGE_SIZE -DSOC_XTAL_FREQ_MHZ=CONFIG_XTAL_FREQ -D_GLIBCXX_HAVE_POSIX_SEMAPHORE -D_GLIBCXX_USE_POSIX_SEMAPHORE -D_GNU_SOURCE -D_POSIX_READER_WRITER_LOCKS -I/Users/reggi/Downloads/rbot/board/build/config -I/Users/reggi/Downloads/rbot/board/main -I/Users/reggi/Downloads/rbot/board/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/newlib/platform_include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/freertos/config/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/freertos/config/include/freertos -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/freertos/config/riscv/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/freertos/FreeRTOS-Kernel/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/freertos/FreeRTOS-Kernel/portable/riscv/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/freertos/FreeRTOS-Kernel/portable/riscv/include/freertos -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/freertos/esp_additions/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_hw_support/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_hw_support/include/soc -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_hw_support/include/soc/esp32c3 -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_hw_support/dma/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_hw_support/ldo/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_hw_support/debug_probe/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_hw_support/mspi_timing_tuning/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_hw_support/mspi_timing_tuning/tuning_scheme_impl/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_hw_support/power_supply/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_hw_support/port/esp32c3/. -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_hw_support/port/esp32c3/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/heap/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/heap/tlsf -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/log/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/soc/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/soc/esp32c3 -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/soc/esp32c3/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/soc/esp32c3/register -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/hal/platform_port/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/hal/esp32c3/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/hal/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_rom/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_rom/esp32c3/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_rom/esp32c3/include/esp32c3 -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_rom/esp32c3 -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_common/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_system/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_system/port/soc -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_system/port/include/riscv -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_system/port/include/private -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/riscv/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/lwip/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/lwip/include/apps -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/lwip/include/apps/sntp -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/lwip/lwip/src/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/lwip/port/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/lwip/port/freertos/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/lwip/port/esp32xx/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/lwip/port/esp32xx/include/arch -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/lwip/port/esp32xx/include/sys -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/nvs_flash/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_partition/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_wifi/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_wifi/include/local -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_wifi/wifi_apps/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_wifi/wifi_apps/nan_app/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_event/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_phy/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_phy/esp32c3/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_netif/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_timer/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_http_client/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_lcd/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_lcd/interface -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/driver/deprecated -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/driver/i2c/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/driver/touch_sensor/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/driver/twai/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_pm/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_ringbuf/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_gpio/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_pcnt/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_gptimer/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_spi/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_mcpwm/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_ana_cmpr/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_i2s/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_sdmmc/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/sdmmc/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_sdspi/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_sdio/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_dac/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_rmt/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_tsens/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_sdm/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_i2c/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_uart/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/vfs/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_ledc/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_parlio/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_usb_serial_jtag/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_twai/include -I/Users/reggi/Downloads/rbot/board/managed_components/espressif__esp-sr/include/esp32c3 -I/Users/reggi/Downloads/rbot/board/managed_components/espressif__esp-sr/src/include -I/Users/reggi/Downloads/rbot/board/managed_components/espressif__esp-sr/esp-tts/esp_tts_chinese/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/json/cJSON -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/spiffs/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp-tls -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp-tls/esp-tls-crypto -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/mbedtls/port/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/mbedtls/mbedtls/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/mbedtls/mbedtls/library -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/mbedtls/esp_crt_bundle/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/mbedtls/mbedtls/3rdparty/everest/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/mbedtls/mbedtls/3rdparty/p256-m -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/mbedtls/mbedtls/3rdparty/p256-m/p256-m -I/Users/reggi/Downloads/rbot/board/managed_components/espressif__esp-tflite-micro -I/Users/reggi/Downloads/rbot/board/managed_components/espressif__esp-tflite-micro/third_party/gemmlowp -I/Users/reggi/Downloads/rbot/board/managed_components/espressif__esp-tflite-micro/third_party/flatbuffers/include -I/Users/reggi/Downloads/rbot/board/managed_components/espressif__esp-tflite-micro/third_party/ruy -I/Users/reggi/Downloads/rbot/board/managed_components/espressif__esp-tflite-micro/third_party/kissfft -march=rv32imc_zicsr_zifencei  -fdiagnostics-color=always -ffunction-sections -fdata-sections -Wall -Werror=all -Wno-error=unused-function -Wno-error=unused-variable -Wno-error=unused-but-set-variable -Wno-error=deprecated-declarations -Wextra -Wno-error=extra -Wno-unused-parameter -Wno-sign-compare -Wno-enum-conversion -gdwarf-4 -ggdb -nostartfiles -Og -fno-shrink-wrap -fmacro-prefix-map=/Users/reggi/Downloads/rbot/board=. -fmacro-prefix-map=/Users/reggi/.espressif/v5.5.2/esp-idf=/IDF -fstrict-volatile-bitfields -fno-jump-tables -fno-tree-switch-conversion -std=gnu17 -Wno-old-style-declaration -DTF_LITE_STATIC_MEMORY -MD -MT esp-idf/main/CMakeFiles/__idf_main.dir/__/src/board_display.c.obj -MF esp-idf/main/CMakeFiles/__idf_main.dir/__/src/board_display.c.obj.d -o esp-idf/main/CMakeFiles/__idf_main.dir/__/src/board_display.c.obj -c /Users/reggi/Downloads/rbot/board/src/board_display.c
+/Users/reggi/Downloads/rbot/board/src/board_display.c: In function 'board_display_draw_overlay':
+/Users/reggi/Downloads/rbot/board/src/board_display.c:495:22: error: implicit declaration of function 'esp_timer_get_time' [-Wimplicit-function-declaration]
+  495 |     int64_t now_ms = esp_timer_get_time() / 1000;
+      |                      ^~~~~~~~~~~~~~~~~~
+[5/11] Building C object esp-idf/main/CMakeFiles/__idf_main.dir/board.c.obj
+FAILED: esp-idf/main/CMakeFiles/__idf_main.dir/board.c.obj 
+/Users/reggi/.espressif/tools/riscv32-esp-elf/esp-14.2.0_20251107/riscv32-esp-elf/bin/riscv32-esp-elf-gcc -DESP_PLATFORM -DIDF_VER=\"v5.5.2-dirty\" -DMBEDTLS_CONFIG_FILE=\"mbedtls/esp_config.h\" -DSOC_MMU_PAGE_SIZE=CONFIG_MMU_PAGE_SIZE -DSOC_XTAL_FREQ_MHZ=CONFIG_XTAL_FREQ -D_GLIBCXX_HAVE_POSIX_SEMAPHORE -D_GLIBCXX_USE_POSIX_SEMAPHORE -D_GNU_SOURCE -D_POSIX_READER_WRITER_LOCKS -I/Users/reggi/Downloads/rbot/board/build/config -I/Users/reggi/Downloads/rbot/board/main -I/Users/reggi/Downloads/rbot/board/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/newlib/platform_include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/freertos/config/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/freertos/config/include/freertos -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/freertos/config/riscv/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/freertos/FreeRTOS-Kernel/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/freertos/FreeRTOS-Kernel/portable/riscv/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/freertos/FreeRTOS-Kernel/portable/riscv/include/freertos -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/freertos/esp_additions/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_hw_support/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_hw_support/include/soc -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_hw_support/include/soc/esp32c3 -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_hw_support/dma/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_hw_support/ldo/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_hw_support/debug_probe/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_hw_support/mspi_timing_tuning/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_hw_support/mspi_timing_tuning/tuning_scheme_impl/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_hw_support/power_supply/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_hw_support/port/esp32c3/. -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_hw_support/port/esp32c3/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/heap/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/heap/tlsf -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/log/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/soc/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/soc/esp32c3 -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/soc/esp32c3/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/soc/esp32c3/register -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/hal/platform_port/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/hal/esp32c3/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/hal/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_rom/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_rom/esp32c3/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_rom/esp32c3/include/esp32c3 -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_rom/esp32c3 -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_common/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_system/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_system/port/soc -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_system/port/include/riscv -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_system/port/include/private -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/riscv/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/lwip/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/lwip/include/apps -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/lwip/include/apps/sntp -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/lwip/lwip/src/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/lwip/port/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/lwip/port/freertos/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/lwip/port/esp32xx/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/lwip/port/esp32xx/include/arch -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/lwip/port/esp32xx/include/sys -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/nvs_flash/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_partition/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_wifi/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_wifi/include/local -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_wifi/wifi_apps/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_wifi/wifi_apps/nan_app/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_event/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_phy/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_phy/esp32c3/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_netif/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_timer/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_http_client/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_lcd/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_lcd/interface -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/driver/deprecated -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/driver/i2c/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/driver/touch_sensor/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/driver/twai/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_pm/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_ringbuf/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_gpio/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_pcnt/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_gptimer/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_spi/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_mcpwm/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_ana_cmpr/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_i2s/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_sdmmc/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/sdmmc/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_sdspi/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_sdio/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_dac/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_rmt/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_tsens/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_sdm/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_i2c/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_uart/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/vfs/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_ledc/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_parlio/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_usb_serial_jtag/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp_driver_twai/include -I/Users/reggi/Downloads/rbot/board/managed_components/espressif__esp-sr/include/esp32c3 -I/Users/reggi/Downloads/rbot/board/managed_components/espressif__esp-sr/src/include -I/Users/reggi/Downloads/rbot/board/managed_components/espressif__esp-sr/esp-tts/esp_tts_chinese/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/json/cJSON -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/spiffs/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp-tls -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/esp-tls/esp-tls-crypto -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/mbedtls/port/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/mbedtls/mbedtls/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/mbedtls/mbedtls/library -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/mbedtls/esp_crt_bundle/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/mbedtls/mbedtls/3rdparty/everest/include -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/mbedtls/mbedtls/3rdparty/p256-m -I/Users/reggi/.espressif/v5.5.2/esp-idf/components/mbedtls/mbedtls/3rdparty/p256-m/p256-m -I/Users/reggi/Downloads/rbot/board/managed_components/espressif__esp-tflite-micro -I/Users/reggi/Downloads/rbot/board/managed_components/espressif__esp-tflite-micro/third_party/gemmlowp -I/Users/reggi/Downloads/rbot/board/managed_components/espressif__esp-tflite-micro/third_party/flatbuffers/include -I/Users/reggi/Downloads/rbot/board/managed_components/espressif__esp-tflite-micro/third_party/ruy -I/Users/reggi/Downloads/rbot/board/managed_components/espressif__esp-tflite-micro/third_party/kissfft -march=rv32imc_zicsr_zifencei  -fdiagnostics-color=always -ffunction-sections -fdata-sections -Wall -Werror=all -Wno-error=unused-function -Wno-error=unused-variable -Wno-error=unused-but-set-variable -Wno-error=deprecated-declarations -Wextra -Wno-error=extra -Wno-unused-parameter -Wno-sign-compare -Wno-enum-conversion -gdwarf-4 -ggdb -nostartfiles -Og -fno-shrink-wrap -fmacro-prefix-map=/Users/reggi/Downloads/rbot/board=. -fmacro-prefix-map=/Users/reggi/.espressif/v5.5.2/esp-idf=/IDF -fstrict-volatile-bitfields -fno-jump-tables -fno-tree-switch-conversion -std=gnu17 -Wno-old-style-declaration -DTF_LITE_STATIC_MEMORY -MD -MT esp-idf/main/CMakeFiles/__idf_main.dir/board.c.obj -MF esp-idf/main/CMakeFiles/__idf_main.dir/board.c.obj.d -o esp-idf/main/CMakeFiles/__idf_main.dir/board.c.obj -c /Users/reggi/Downloads/rbot/board/main/board.c
+In file included from /Users/reggi/Downloads/rbot/board/main/cloud_client.h:7,
+                 from /Users/reggi/Downloads/rbot/board/main/board.c:24:
+/Users/reggi/Downloads/rbot/board/main/board_status.h:9:5: error: redeclaration of enumerator 'FACE_NEUTRAL'
+    9 |     FACE_NEUTRAL,
+      |     ^~~~~~~~~~~~
+In file included from /Users/reggi/Downloads/rbot/board/main/board.c:17:
+/Users/reggi/Downloads/rbot/board/include/board_types.h:8:5: note: previous definition of 'FACE_NEUTRAL' with type 'enum <anonymous>'
+    8 |     FACE_NEUTRAL,
+      |     ^~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:10:5: error: redeclaration of enumerator 'FACE_HAPPY'
+   10 |     FACE_HAPPY,
+      |     ^~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:9:5: note: previous definition of 'FACE_HAPPY' with type 'enum <anonymous>'
+    9 |     FACE_HAPPY,
+      |     ^~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:11:5: error: redeclaration of enumerator 'FACE_CONFUSED'
+   11 |     FACE_CONFUSED,
+      |     ^~~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:10:5: note: previous definition of 'FACE_CONFUSED' with type 'enum <anonymous>'
+   10 |     FACE_CONFUSED,
+      |     ^~~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:12:5: error: redeclaration of enumerator 'FACE_ERROR'
+   12 |     FACE_ERROR
+      |     ^~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:11:5: note: previous definition of 'FACE_ERROR' with type 'enum <anonymous>'
+   11 |     FACE_ERROR
+      |     ^~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:13:3: error: conflicting types for 'face_state_t'; have 'enum <anonymous>'
+   13 | } face_state_t;
+      |   ^~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:12:3: note: previous declaration of 'face_state_t' with type 'face_state_t'
+   12 | } face_state_t;
+      |   ^~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:16:5: error: redeclaration of enumerator 'BLINK_OPEN'
+   16 |     BLINK_OPEN,
+      |     ^~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:16:5: note: previous definition of 'BLINK_OPEN' with type 'enum <anonymous>'
+   16 |     BLINK_OPEN,
+      |     ^~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:17:5: error: redeclaration of enumerator 'BLINK_HALF'
+   17 |     BLINK_HALF,
+      |     ^~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:17:5: note: previous definition of 'BLINK_HALF' with type 'enum <anonymous>'
+   17 |     BLINK_HALF,
+      |     ^~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:18:5: error: redeclaration of enumerator 'BLINK_CLOSED'
+   18 |     BLINK_CLOSED
+      |     ^~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:18:5: note: previous definition of 'BLINK_CLOSED' with type 'enum <anonymous>'
+   18 |     BLINK_CLOSED
+      |     ^~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:19:3: error: conflicting types for 'blink_state_t'; have 'enum <anonymous>'
+   19 | } blink_state_t;
+      |   ^~~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:19:3: note: previous declaration of 'blink_state_t' with type 'blink_state_t'
+   19 | } blink_state_t;
+      |   ^~~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:22:5: error: redeclaration of enumerator 'WIFI_OFF'
+   22 |     WIFI_OFF,
+      |     ^~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:23:5: note: previous definition of 'WIFI_OFF' with type 'enum <anonymous>'
+   23 |     WIFI_OFF,
+      |     ^~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:23:5: error: redeclaration of enumerator 'WIFI_CONNECTING'
+   23 |     WIFI_CONNECTING,
+      |     ^~~~~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:24:5: note: previous definition of 'WIFI_CONNECTING' with type 'enum <anonymous>'
+   24 |     WIFI_CONNECTING,
+      |     ^~~~~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:24:5: error: redeclaration of enumerator 'WIFI_CONNECTED'
+   24 |     WIFI_CONNECTED,
+      |     ^~~~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:25:5: note: previous definition of 'WIFI_CONNECTED' with type 'enum <anonymous>'
+   25 |     WIFI_CONNECTED,
+      |     ^~~~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:25:5: error: redeclaration of enumerator 'WIFI_CONNECTED_STABLE'
+   25 |     WIFI_CONNECTED_STABLE,
+      |     ^~~~~~~~~~~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:26:5: note: previous definition of 'WIFI_CONNECTED_STABLE' with type 'enum <anonymous>'
+   26 |     WIFI_CONNECTED_STABLE,
+      |     ^~~~~~~~~~~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:26:5: error: redeclaration of enumerator 'WIFI_ERROR'
+   26 |     WIFI_ERROR
+      |     ^~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:27:5: note: previous definition of 'WIFI_ERROR' with type 'enum <anonymous>'
+   27 |     WIFI_ERROR
+      |     ^~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:27:3: error: conflicting types for 'wifi_status_t'; have 'enum <anonymous>'
+   27 | } wifi_status_t;
+      |   ^~~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:28:3: note: previous declaration of 'wifi_status_t' with type 'wifi_status_t'
+   28 | } wifi_status_t;
+      |   ^~~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:30:5: error: redeclaration of enumerator 'NET_UNKNOWN'
+   30 |     NET_UNKNOWN,
+      |     ^~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:32:5: note: previous definition of 'NET_UNKNOWN' with type 'enum <anonymous>'
+   32 |     NET_UNKNOWN,
+      |     ^~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:31:5: error: redeclaration of enumerator 'NET_WIFI_ONLY'
+   31 |     NET_WIFI_ONLY,
+      |     ^~~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:33:5: note: previous definition of 'NET_WIFI_ONLY' with type 'enum <anonymous>'
+   33 |     NET_WIFI_ONLY,
+      |     ^~~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:32:5: error: redeclaration of enumerator 'NET_CHECKING'
+   32 |     NET_CHECKING,
+      |     ^~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:34:5: note: previous definition of 'NET_CHECKING' with type 'enum <anonymous>'
+   34 |     NET_CHECKING,
+      |     ^~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:33:5: error: redeclaration of enumerator 'NET_ONLINE'
+   33 |     NET_ONLINE,
+      |     ^~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:35:5: note: previous definition of 'NET_ONLINE' with type 'enum <anonymous>'
+   35 |     NET_ONLINE,
+      |     ^~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:34:5: error: redeclaration of enumerator 'NET_OFFLINE'
+   34 |     NET_OFFLINE
+      |     ^~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:36:5: note: previous definition of 'NET_OFFLINE' with type 'enum <anonymous>'
+   36 |     NET_OFFLINE
+      |     ^~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:35:3: error: conflicting types for 'net_state_t'; have 'enum <anonymous>'
+   35 | } net_state_t;
+      |   ^~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:37:3: note: previous declaration of 'net_state_t' with type 'net_state_t'
+   37 | } net_state_t;
+      |   ^~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:38:5: error: redeclaration of enumerator 'BAT_FULL'
+   38 |     BAT_FULL,
+      |     ^~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:41:5: note: previous definition of 'BAT_FULL' with type 'enum <anonymous>'
+   41 |     BAT_FULL,
+      |     ^~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:39:5: error: redeclaration of enumerator 'BAT_MED'
+   39 |     BAT_MED,
+      |     ^~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:42:5: note: previous definition of 'BAT_MED' with type 'enum <anonymous>'
+   42 |     BAT_MED,
+      |     ^~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:40:5: error: redeclaration of enumerator 'BAT_LOW'
+   40 |     BAT_LOW,
+      |     ^~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:43:5: note: previous definition of 'BAT_LOW' with type 'enum <anonymous>'
+   43 |     BAT_LOW,
+      |     ^~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:41:5: error: redeclaration of enumerator 'BAT_CRIT'
+   41 |     BAT_CRIT,
+      |     ^~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:44:5: note: previous definition of 'BAT_CRIT' with type 'enum <anonymous>'
+   44 |     BAT_CRIT,
+      |     ^~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:42:5: error: redeclaration of enumerator 'BAT_CHARGING'
+   42 |     BAT_CHARGING
+      |     ^~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:45:5: note: previous definition of 'BAT_CHARGING' with type 'enum <anonymous>'
+   45 |     BAT_CHARGING
+      |     ^~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:43:3: error: conflicting types for 'battery_state_t'; have 'enum <anonymous>'
+   43 | } battery_state_t;
+      |   ^~~~~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:46:3: note: previous declaration of 'battery_state_t' with type 'battery_state_t'
+   46 | } battery_state_t;
+      |   ^~~~~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:46:5: error: redeclaration of enumerator 'CHAT_IDLE'
+   46 |     CHAT_IDLE,
+      |     ^~~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:50:5: note: previous definition of 'CHAT_IDLE' with type 'enum <anonymous>'
+   50 |     CHAT_IDLE,
+      |     ^~~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:47:5: error: redeclaration of enumerator 'CHAT_BLOCKED'
+   47 |     CHAT_BLOCKED,
+      |     ^~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:51:5: note: previous definition of 'CHAT_BLOCKED' with type 'enum <anonymous>'
+   51 |     CHAT_BLOCKED,
+      |     ^~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:48:5: error: redeclaration of enumerator 'CHAT_SENDING'
+   48 |     CHAT_SENDING,
+      |     ^~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:52:5: note: previous definition of 'CHAT_SENDING' with type 'enum <anonymous>'
+   52 |     CHAT_SENDING,
+      |     ^~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:49:5: error: redeclaration of enumerator 'CHAT_WAITING'
+   49 |     CHAT_WAITING,
+      |     ^~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:53:5: note: previous definition of 'CHAT_WAITING' with type 'enum <anonymous>'
+   53 |     CHAT_WAITING,
+      |     ^~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:50:5: error: redeclaration of enumerator 'CHAT_RENDER'
+   50 |     CHAT_RENDER,
+      |     ^~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:54:5: note: previous definition of 'CHAT_RENDER' with type 'enum <anonymous>'
+   54 |     CHAT_RENDER,
+      |     ^~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:51:5: error: redeclaration of enumerator 'CHAT_ERROR'
+   51 |     CHAT_ERROR
+      |     ^~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:55:5: note: previous definition of 'CHAT_ERROR' with type 'enum <anonymous>'
+   55 |     CHAT_ERROR
+      |     ^~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:52:3: error: conflicting types for 'chat_state_t'; have 'enum <anonymous>'
+   52 | } chat_state_t;
+      |   ^~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:56:3: note: previous declaration of 'chat_state_t' with type 'chat_state_t'
+   56 | } chat_state_t;
+      |   ^~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:55:5: error: redeclaration of enumerator 'AI_IDLE'
+   55 |     AI_IDLE,
+      |     ^~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:60:5: note: previous definition of 'AI_IDLE' with type 'enum <anonymous>'
+   60 |     AI_IDLE,
+      |     ^~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:56:5: error: redeclaration of enumerator 'AI_LISTENING'
+   56 |     AI_LISTENING,
+      |     ^~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:61:5: note: previous definition of 'AI_LISTENING' with type 'enum <anonymous>'
+   61 |     AI_LISTENING,
+      |     ^~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:57:5: error: redeclaration of enumerator 'AI_THINKING'
+   57 |     AI_THINKING,
+      |     ^~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:62:5: note: previous definition of 'AI_THINKING' with type 'enum <anonymous>'
+   62 |     AI_THINKING,
+      |     ^~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:58:5: error: redeclaration of enumerator 'AI_ANSWERING'
+   58 |     AI_ANSWERING,
+      |     ^~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:63:5: note: previous definition of 'AI_ANSWERING' with type 'enum <anonymous>'
+   63 |     AI_ANSWERING,
+      |     ^~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:59:5: error: redeclaration of enumerator 'AI_ERROR'
+   59 |     AI_ERROR
+      |     ^~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:64:5: note: previous definition of 'AI_ERROR' with type 'enum <anonymous>'
+   64 |     AI_ERROR
+      |     ^~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board_status.h:60:3: error: conflicting types for 'ai_state_t'; have 'enum <anonymous>'
+   60 | } ai_state_t;
+      |   ^~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/include/board_types.h:65:3: note: previous declaration of 'ai_state_t' with type 'ai_state_t'
+   65 | } ai_state_t;
+      |   ^~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board.c:104:13: warning: 'g_ai_agent_started' defined but not used [-Wunused-variable]
+  104 | static bool g_ai_agent_started = false;
+      |             ^~~~~~~~~~~~~~~~~~
+/Users/reggi/Downloads/rbot/board/main/board.c:103:13: warning: 'g_autosend_hello_sent' defined but not used [-Wunused-variable]
+  103 | static bool g_autosend_hello_sent = false;
+      |             ^~~~~~~~~~~~~~~~~~~~~
+ninja: build stopped: subcommand failed.
+ninja failed with exit code 1, output of the command is in the /Users/reggi/Downloads/rbot/board/build/log/idf_py_stderr_output_76420 and /Users/reggi/Downloads/rbot/board/build/log/idf_py_stdout_output_76420

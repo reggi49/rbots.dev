@@ -7,19 +7,27 @@ idf_component_register(
         "tts_client.c"
         "wake_word_model.cc"
         "wake_word_runtime.cc"
+        "../src/board_display.c"
+        "../src/board_network.c"
+        "../src/board_power.c"
+        "../src/board_audio.c"
     INCLUDE_DIRS
         "."
+        "../include"
     REQUIRES
-        esp-tflite-micro
         nvs_flash
-        esp_event
         esp_wifi
-        esp_http_client
-        driver
-        log
-        lwip
-        esp_timer
+        esp_event
         esp_netif
+        esp_timer
+        esp_http_client
+        esp_lcd
+        driver
+        espressif__esp-sr
         json
+        lwip
         esp-tls
+        log
+    EMBED_TXTFILES
+        "certs/rbots_root_ca.pem"
 )

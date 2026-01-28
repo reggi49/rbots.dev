@@ -1,0 +1,29 @@
+menu "RBOT"
+
+config RBOT_ENABLE_CHAT_CONSOLE
+    bool "Enable chat console + auto hello (debug only)"
+    default n
+    help
+        Enables the interactive serial chat console and the auto 'hello' demo request.
+        Keep this OFF for production voice pipeline to reduce RAM usage and avoid
+        unintended background cloud requests.
+
+config RBOT_ENABLE_AUTO_HELLO
+    bool "Enable auto hello demo (debug only)"
+    default n
+    help
+        Auto-send a 'hello' chat request on boot for debugging. Keep OFF for production.
+
+config RBOT_ENABLE_VOICE_PIPELINE
+    bool "Enable voice pipeline (wake word + capture + STT + AI + TTS)"
+    default y
+    help
+        Main voice pipeline. Disable only for minimal debug builds without audio/AI.
+
+config RBOT_DEBUG_WW_BANNER
+    bool "Enable wake-word banner prints (debug only)"
+    default n
+    help
+        Enables the wake-word model banner prints at boot. Keep OFF in production.
+
+endmenu

@@ -6,7 +6,156 @@
 #include <stdint.h>
 
 #include "esp_http_client.h"
+#include "esp_crt_bundle.h"
+#include "cJSON.h"
 #include "esp_log.h"
+#include "esp_timer.h"
+#include "esp_heap_caps.h"
+#include <string.h>
+#include <time.h>
+#include "lwip/err.h"
+#include "lwip/sockets.h"
+#include "lwip/sys.h"
+#include "lwip/netdb.h"
+#include "lwip/dns.h"
+
+bool cloud_client_stt_send(const int16_t *pcm, size_t samples, char *text_out, size_t text_out_len, stt_request_result_t *res)
+{
+    if (res) {
+        memset(res, 0, sizeof(*res));
+        res->status_code = -1;
+        res->fail_stage = STT_FAIL_NONE;
+    }
+    if (!pcm || samples == 0 || !text_out || text_out_len == 0) return false;
+
+    const size_t data_bytes = samples * sizeof(int16_t);
+    const size_t wav_header = 44;
+    const size_t total_len = wav_header + data_bytes;
+
+    uint8_t header[44] = {0};
+    memcpy(header, "RIFF", 4);
+    uint32_t chunk_size = (uint32_t)(total_len - 8);
+    header[4] = chunk_size & 0xFF;
+    header[5] = (chunk_size >> 8) & 0xFF;
+    header[6] = (chunk_size >> 16) & 0xFF;
+    header[7] = (chunk_size >> 24) & 0xFF;
+    memcpy(header + 8, "WAVEfmt ", 8);
+    header[16] = 16; 
+    header[20] = 1; header[21] = 0; 
+    header[22] = 1; header[23] = 0; 
+    header[24] = 0x80; header[25] = 0x3E; 
+    header[26] = 0x00; header[27] = 0x00;
+    uint32_t byte_rate = 16000 * 2;
+    header[28] = byte_rate & 0xFF;
+    header[29] = (byte_rate >> 8) & 0xFF;
+    header[30] = (byte_rate >> 16) & 0xFF;
+    header[31] = (byte_rate >> 24) & 0xFF;
+    header[32] = 2; header[33] = 0; 
+    header[34] = 16; header[35] = 0; 
+    memcpy(header + 36, "data", 4);
+    header[40] = data_bytes & 0xFF;
+    header[41] = (data_bytes >> 8) & 0xFF;
+    header[42] = (data_bytes >> 16) & 0xFF;
+    header[43] = (data_bytes >> 24) & 0xFF;
+
+    esp_http_client_config_t cfg = {
+        .url = "https://rbots.dev/speech-to-text",
+        .method = HTTP_METHOD_POST,
+        .crt_bundle_attach = esp_crt_bundle_attach,
+        .transport_type = HTTP_TRANSPORT_OVER_SSL,
+        .timeout_ms = 20000,
+    };
+
+    esp_http_client_handle_t client = esp_http_client_init(&cfg);
+    if (!client) {
+        if (res) {
+            res->fail_stage = STT_FAIL_HTTP;
+            res->fail_errno = ESP_FAIL;
+        }
+        return false;
+    }
+
+    esp_http_client_set_header(client, "Content-Type", "audio/wav; codecs=audio/pcm; samplerate=16000");
+
+    bool lock = net_http_lock_take(20000);
+    if (!lock) {
+        esp_http_client_cleanup(client);
+        if (res) {
+            res->fail_stage = STT_FAIL_HTTP;
+            res->fail_errno = ESP_ERR_INVALID_STATE;
+            snprintf(res->fail_msg, sizeof(res->fail_msg), "lock busy");
+        }
+        return false;
+    }
+
+    esp_err_t err = esp_http_client_open(client, total_len);
+    if (err != ESP_OK) {
+        net_http_lock_give();
+        esp_http_client_cleanup(client);
+        if (res) {
+            res->fail_stage = STT_FAIL_HTTP;
+            res->fail_errno = err;
+             snprintf(res->fail_msg, sizeof(res->fail_msg), "open fail");
+        }
+        return false;
+    }
+
+    esp_http_client_write(client, (const char *)header, 44);
+    // Write PCM in chunks
+    const size_t chunk_sz = 1024;
+    size_t sent = 0;
+    while(sent < data_bytes) {
+        size_t allow = data_bytes - sent;
+        if(allow > chunk_sz) allow = chunk_sz;
+        int w = esp_http_client_write(client, (const char *)(pcm) + sent, allow);
+        if (w < 0) {
+             err = ESP_FAIL;
+             break;
+        }
+        sent += w;
+    }
+
+    if (err == ESP_OK) {
+        // Read response
+        int content_len = esp_http_client_fetch_headers(client);
+        if (content_len >= 0) {
+            int status = esp_http_client_get_status_code(client);
+            if (res) res->status_code = status;
+            
+            if (status == 200) {
+                // Read JSON body
+                char buf[512] = {0};
+                int r = esp_http_client_read_response(client, buf, sizeof(buf)-1);
+                if (r > 0) {
+                     // Parse JSON
+                     cJSON *json = cJSON_Parse(buf);
+                     if (json) {
+                         cJSON *text = cJSON_GetObjectItem(json, "text");
+                         if (cJSON_IsString(text) && (text->valuestring != NULL)) {
+                             strncpy(text_out, text->valuestring, text_out_len);
+                             text_out[text_out_len-1] = '\0';
+                         }
+                         cJSON_Delete(json);
+                     } else {
+                         if (res) res->fail_stage = STT_FAIL_JSON;
+                     }
+                }
+            } else {
+                 if (res) {
+                     res->fail_stage = STT_FAIL_HTTP;
+                     snprintf(res->fail_msg, sizeof(res->fail_msg), "http %d", status);
+                 }
+                 err = ESP_FAIL;
+            }
+        } else {
+             err = ESP_FAIL;
+        }
+    }
+
+    net_http_lock_give();
+    esp_http_client_cleanup(client);
+    return (err == ESP_OK);
+}
 #include "esp_timer.h"
 #include "esp_heap_caps.h"
 #include "cJSON.h"
@@ -21,6 +170,7 @@
 #include "command_dispatcher.h"
 #include "board_status.h"
 #include "tts_client.h"
+#include "certs.h"
 
 #define TAG "CLOUD"
 #define CHAT_TAG "CHAT"
@@ -252,7 +402,6 @@ bool cloud_client_send_heartbeat(cloud_command_t *out)
     esp_http_client_config_t config = {
         .url = HEARTBEAT_URL,
         .method = HTTP_METHOD_POST,
-        .crt_bundle_attach = esp_crt_bundle_attach,
         .transport_type = HTTP_TRANSPORT_OVER_SSL,
         .timeout_ms = HEARTBEAT_TIMEOUT_MS,
         .disable_auto_redirect = true,
@@ -260,6 +409,8 @@ bool cloud_client_send_heartbeat(cloud_command_t *out)
         .keep_alive_idle = 5000,
         .keep_alive_interval = 5000,
         .keep_alive_count = 3,
+        .cert_pem = RBOTS_ROOT_CA_PEM_START,
+        .cert_len = RBOTS_ROOT_CA_PEM_LEN,
     };
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
@@ -357,7 +508,6 @@ esp_err_t cloud_client_chat_gradient(const char *prompt, char *answer_out, size_
     esp_http_client_config_t config = {
         .url = CHAT_GRADIENT_URL,
         .method = HTTP_METHOD_POST,
-        .crt_bundle_attach = esp_crt_bundle_attach,
         .transport_type = HTTP_TRANSPORT_OVER_SSL,
         .timeout_ms = CHAT_TIMEOUT_MS,
         .keep_alive_enable = true,
@@ -366,6 +516,8 @@ esp_err_t cloud_client_chat_gradient(const char *prompt, char *answer_out, size_
         .keep_alive_count = 3,
         .event_handler = chat_http_event_handle,
         .user_data = &capture,
+        .cert_pem = RBOTS_ROOT_CA_PEM_START,
+        .cert_len = RBOTS_ROOT_CA_PEM_LEN,
     };
 
     esp_http_client_handle_t client = esp_http_client_init(&config);

@@ -222,6 +222,25 @@ bool audio_player_submit_pcm(const uint8_t *data, size_t len)
     return false;
 }
 
+bool audio_player_wait_empty(uint32_t timeout_ms)
+{
+    if (!s_audio_rb) return true;
+    int64_t start = esp_timer_get_time() / 1000;
+    while (1) {
+        size_t free_bytes = xRingbufferGetCurFreeSize(s_audio_rb);
+        if (free_bytes == AUDIO_RING_BUFFER_BYTES) {
+            return true;
+        }
+        if (timeout_ms > 0) {
+            int64_t now = esp_timer_get_time() / 1000;
+            if ((uint32_t)(now - start) >= timeout_ms) {
+                return false;
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
+
 bool audio_player_is_playing(void)
 {
     return s_started && s_i2s_ready;

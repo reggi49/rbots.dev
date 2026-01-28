@@ -14,6 +14,7 @@
 #include "board_status.h"
 #include "cloud_client.h"
 #include "esp_timer.h"
+#include "certs.h"
 
 #define TTS_URL "https://rbots.dev/tts/azure"
 #define TTS_VOICE "id-ID-ArdiNeural"
@@ -363,9 +364,11 @@ static esp_err_t tts_stream_internal(const char *text, tts_stream_result_t *resu
     esp_http_client_config_t cfg = {
         .url = TTS_URL,
         .method = HTTP_METHOD_POST,
-        .crt_bundle_attach = esp_crt_bundle_attach,
         .transport_type = HTTP_TRANSPORT_OVER_SSL,
         .timeout_ms = 20000,
+        .keep_alive_enable = true,
+        .cert_pem = RBOTS_ROOT_CA_PEM_START,
+        .cert_len = RBOTS_ROOT_CA_PEM_LEN,
     };
 
     esp_http_client_handle_t client = esp_http_client_init(&cfg);

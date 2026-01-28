@@ -1,0 +1,14 @@
+menuconfig RBOT_ENABLE_APP_HEARTBEAT_LOG
+    bool "Enable periodic STATE heartbeat log"
+    default n
+    help
+        Log "STATE: RUNNING" every 5 seconds. Enable only for debugging; disable in production to reduce
+        log spam once AI/NET/heartbeat events are stable.
+
+menuconfig RBOT_ENABLE_TOUCH_WAKE
+    bool "Enable touch-triggered wakeword"
+    default y
+    help
+        Treat a rising edge on the touch pin (GPIO0) as an artificial wakeword trigger.
+        This simply calls board_wakeword_notify(1.0f) for debugging and does not change any
+        GPIO mappings or pipeline behavior. Keep it disabled for production.

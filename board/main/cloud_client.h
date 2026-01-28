@@ -36,9 +36,23 @@ typedef struct {
     char fail_msg[64];
 } chat_request_result_t;
 
+typedef enum {
+    STT_FAIL_NONE,
+    STT_FAIL_HTTP,
+    STT_FAIL_JSON
+} stt_fail_stage_t;
+
+typedef struct {
+    int status_code;
+    stt_fail_stage_t fail_stage;
+    int fail_errno;
+    char fail_msg[64];
+} stt_request_result_t;
+
 void cloud_client_init(void);
 bool cloud_client_send_heartbeat(cloud_command_t *out);
 esp_err_t cloud_client_chat_gradient(const char *prompt, char *answer_out, size_t max_len, chat_request_result_t *result);
+bool cloud_client_stt_send(const int16_t *pcm, size_t samples, char *text_out, size_t text_out_len, stt_request_result_t *res);
 esp_err_t cloud_client_tts_azure(const char *text);
 esp_err_t cloud_client_tts_azure_stream_play(const char *text, tts_stream_result_t *result);
 
