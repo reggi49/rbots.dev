@@ -28,6 +28,7 @@ idf_component_register(
         lwip
         esp-tls
         log
+        wakeword
     EMBED_TXTFILES
         "certs/rbots_root_ca.pem"
 )

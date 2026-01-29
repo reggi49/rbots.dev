@@ -285,9 +285,18 @@ board_network_t* board_network_init(void)
     
     esp_wifi_set_mode(WIFI_MODE_STA);
     esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
-    esp_wifi_start();
+    // [1.1.36] Kill-Switch: Do NOT start WiFi yet.
+    // esp_wifi_start(); 
     
     return net;
+}
+
+// [1.1.38] Manual Connect (Handover)
+void board_network_connect(board_network_t *net)
+{
+    if (!net) return;
+    ESP_LOGI(TAG, "Manual WiFi Start Triggered");
+    esp_wifi_start(); // Triggers WIFI_EVENT_STA_START -> event handler -> connect
 }
 
 bool board_network_is_stable(board_network_t *net)

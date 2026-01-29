@@ -8,11 +8,10 @@
 extern "C" {
 #endif
 
-bool wake_word_engine_init(void);
-bool wake_word_engine_ready(void);
-bool wake_word_engine_infer_from_pcm(const int16_t *pcm, size_t samples, float *score_out);
-bool wake_word_engine_extract_features(const int16_t *pcm, size_t samples, float *feat_out, size_t feat_len);
-bool wake_word_engine_infer_from_features(const float *feat_49x10, float *score_out);
+// [1.1.48] Simplified API - only Edge Impulse functions are used
+bool ei_wake_word_engine_init(void);
+bool ei_wake_word_engine_infer(const int16_t *pcm, size_t samples, float *score_out);
+int16_t* wake_word_get_window_buffer(void);
 
 #ifdef __cplusplus
 }

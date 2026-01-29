@@ -49,8 +49,6 @@ struct OpDataConv {
   // A buffer used to store unpacked filter values. This is used if the source
   // tensor is of n-bit precision that cannot be easily processed by kernels.
   int filter_buffer_index;
-  void* filter_quantization = nullptr;
-  float filter_scale; 
 
 #ifdef USE_TFLM_COMPRESSION
 

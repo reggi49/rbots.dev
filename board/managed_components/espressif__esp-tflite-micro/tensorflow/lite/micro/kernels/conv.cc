@@ -58,66 +58,22 @@ TfLiteStatus ConvEval(TfLiteContext* context, TfLiteNode* node) {
 
   switch (input->type) {  // Already know in/out types are same.
     case kTfLiteFloat32: {
-      const float *filter_data = nullptr;
-      const float *bias_data = nullptr;
-
-      if (filter->type == kTfLiteInt8) {
-          float* dequantized_filter = (float*)context->GetScratchBuffer(context, data.filter_buffer_index);
-          const int8_t* filter_data_int8 = tflite::micro::GetTensorData<int8_t>(filter);
-          int element_count = tflite::micro::GetTensorShape(filter).FlatSize();
-          
-          const int num_channels = filter->dims->data[kConvQuantizedDimension];
-          const int per_channel_size = element_count / num_channels;
-          
-            if (data.filter_quantization != nullptr) {
-               const TfLiteAffineQuantization* quant = (const TfLiteAffineQuantization*)data.filter_quantization;
-                 if (quant && quant->scale && quant->zero_point &&
-                   quant->scale->size > 0 && quant->zero_point->size > 0) {
-                 for (int c = 0; c < num_channels; ++c) {
-                   float scale = quant->scale->data[c];
-                   int32_t zero_point = quant->zero_point->data[c];
-                   for (int i = 0; i < per_channel_size; ++i) {
-                     int idx = c * per_channel_size + i;
-                     dequantized_filter[idx] = (filter_data_int8[idx] - zero_point) * scale;
-                   }
-                 }
-               } else {
-                 float scale = data.filter_scale;
-                 int32_t zero_point = data.filter_zero_point;
-                 for (int i = 0; i < element_count; ++i) {
-                   dequantized_filter[i] = (filter_data_int8[i] - zero_point) * scale;
-                 }
-               }
-            } else {
-               float scale = data.filter_scale;
-               int32_t zero_point = data.filter_zero_point;
-               for (int i = 0; i < element_count; ++i) {
-                   dequantized_filter[i] = (filter_data_int8[i] - zero_point) * scale;
-               }
-          }
-          filter_data = dequantized_filter;
-          // Bias is assumed to be float in hybrid mode
-          bias_data = tflite::micro::GetOptionalTensorData<float>(bias);
-      } else {
-#ifdef USE_TFLM_COMPRESSION
-          filter_data = tflite::micro::GetTensorData<float>(micro_context, filter,
-                                              weights_comp_td,
-                                              data.weights_scratch_index);
-          bias_data = tflite::micro::GetOptionalTensorData<float>(
-              micro_context, bias, bias_comp_td, data.bias_scratch_index);
-#else   // USE_TFLM_COMPRESSION
-          filter_data = tflite::micro::GetTensorData<float>(filter);
-          bias_data = tflite::micro::GetOptionalTensorData<float>(bias);
-#endif  // USE_TFLM_COMPRESSION
-      }
-
       tflite::reference_ops::Conv(
           ConvParamsFloat(params, data), tflite::micro::GetTensorShape(input),
           tflite::micro::GetTensorData<float>(input),
           tflite::micro::GetTensorShape(filter),
-          filter_data,
+#ifdef USE_TFLM_COMPRESSION
+          tflite::micro::GetTensorData<float>(micro_context, filter,
+                                              weights_comp_td,
+                                              data.weights_scratch_index),
           tflite::micro::GetTensorShape(bias),
-          bias_data,
+          tflite::micro::GetOptionalTensorData<float>(
+              micro_context, bias, bias_comp_td, data.bias_scratch_index),
+#else   // USE_TFLM_COMPRESSION
+          tflite::micro::GetTensorData<float>(filter),
+          tflite::micro::GetTensorShape(bias),
+          tflite::micro::GetOptionalTensorData<float>(bias),
+#endif  // USE_TFLM_COMPRESSION
           tflite::micro::GetTensorShape(output),
           tflite::micro::GetTensorData<float>(output),
           tflite::micro::GetTensorShape(nullptr), nullptr);

@@ -159,7 +159,6 @@ TfLiteStatus ConvPrepare(TfLiteContext* context, TfLiteNode* node) {
   TF_LITE_ENSURE_MSG(
       context,
       (input->type == kTfLiteFloat32 && filter->type == kTfLiteFloat32) ||
-      (input->type == kTfLiteFloat32 && filter->type == kTfLiteInt8) ||
           (input->type == kTfLiteInt16 && filter->type == kTfLiteInt8) ||
           (input->type == kTfLiteInt8 &&
            (filter->type == kTfLiteInt4 || filter->type == kTfLiteInt8)),
@@ -171,21 +170,6 @@ TfLiteStatus ConvPrepare(TfLiteContext* context, TfLiteNode* node) {
   const int filter_height = filter->dims->data[1];
   const int output_width = output->dims->data[2];
   const int output_height = output->dims->data[1];
-
-  if (input->type == kTfLiteFloat32 && filter->type == kTfLiteInt8) {
-      int element_count = 1;
-      for (int i = 0; i < filter->dims->size; ++i) {
-         element_count *= filter->dims->data[i];
-      }
-      TF_LITE_ENSURE_STATUS(context->RequestScratchBufferInArena(
-         context, element_count * sizeof(float), &data->filter_buffer_index));
-      if (filter->quantization.type == kTfLiteAffineQuantization) {
-         data->filter_quantization = filter->quantization.params;
-      } else {
-         data->filter_quantization = nullptr;
-      }
-      data->filter_scale = filter->params.scale;
-  }
 
   // Dynamically allocate per-channel quantization parameters.
   const int num_channels = filter->dims->data[kConvQuantizedDimension];

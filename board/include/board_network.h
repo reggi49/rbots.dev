@@ -13,6 +13,9 @@ typedef struct board_network_s board_network_t;
  */
 board_network_t* board_network_init(void);
 
+// [1.1.38]
+void board_network_connect(board_network_t *net);
+
 /**
  * @brief Check if network is connected and stable
  */

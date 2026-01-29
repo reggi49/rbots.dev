@@ -64,7 +64,7 @@ set(signal_srcs
 # remove sources which will be provided by esp_nn
 list(REMOVE_ITEM srcs_kernels
           "${tfmicro_kernels_dir}/add.cc"
-          # "${tfmicro_kernels_dir}/conv.cc"  <-- Restored standard Conv2D for hybrid support
+          "${tfmicro_kernels_dir}/conv.cc"
           "${tfmicro_kernels_dir}/depthwise_conv.cc"
           "${tfmicro_kernels_dir}/fully_connected.cc"
           "${tfmicro_kernels_dir}/mul.cc"
@@ -73,7 +73,6 @@ list(REMOVE_ITEM srcs_kernels
 
 FILE(GLOB esp_nn_kernels
           "${tfmicro_kernels_dir}/esp_nn/*.cc")
-list(REMOVE_ITEM esp_nn_kernels "${tfmicro_kernels_dir}/esp_nn/conv.cc") # <-- Remove optimized Conv2D to avoid hybrid error
 
 set(lib_srcs
           "${srcs_micro}"

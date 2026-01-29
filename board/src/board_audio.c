@@ -5,10 +5,9 @@
 #include "esp_log.h"
 #include "driver/i2s_std.h"
 #include "esp_timer.h"
-#include "esp_wn_iface.h"
-#include "esp_wn_models.h"
-#include "model_path.h"
 #include "sdkconfig.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #define TAG "BD_AUDIO"
 
@@ -29,12 +28,6 @@ struct board_audio_s {
     i2s_chan_handle_t rx_handle;
     bool mic_ready;
     
-    // WakeNet
-    const esp_wn_iface_t *wn_iface;
-    model_iface_data_t *wn_model_data;
-    srmodel_list_t *srmodels;
-    
-    int16_t detect_buf[MAX_CHUNK_SAMPLES]; // Persistent buffer
     int32_t raw_buffer[MAX_CHUNK_SAMPLES * 2]; // Stereo raw
 };
 
@@ -53,32 +46,7 @@ board_audio_t* board_audio_init(void)
     board_audio_t *audio = &g_audio_instance;
     memset(audio, 0, sizeof(struct board_audio_s));
     
-    // WakeNet Init
-    ESP_LOGI(TAG, "Initializing WakeNet...");
-    audio->srmodels = esp_srmodel_init("model"); // Partition label
-    const char *wn_name = "wn9s_hiesp";
-    if (audio->srmodels) {
-        if (esp_srmodel_exists(audio->srmodels, (char *)wn_name) < 0) {
-            wn_name = esp_srmodel_filter(audio->srmodels, ESP_WN_PREFIX, NULL);
-        }
-    } else {
-        ESP_LOGE(TAG, "WakeNet model partition not found");
-        return NULL; // Critical fail
-    }
-    
-    if (wn_name) {
-        audio->wn_iface = esp_wn_handle_from_name(wn_name);
-    }
-    
-    if (audio->wn_iface) {
-        audio->wn_model_data = audio->wn_iface->create(wn_name, DET_MODE_90);
-        if (audio->wn_model_data) {
-             ESP_LOGI(TAG, "WakeNet READY. Chunk size: %d", audio->wn_iface->get_samp_chunksize(audio->wn_model_data));
-        } else {
-            ESP_LOGE(TAG, "WakeNet create failed");
-        }
-    }
-    
+    ESP_LOGI(TAG, "Audio intialized (WakeNet Removed)");
     return audio;
 }
 
@@ -146,13 +114,11 @@ void board_audio_mic_stop(board_audio_t *audio)
 board_audio_wake_result_t board_audio_process_wake_word(board_audio_t *audio)
 {
     board_audio_wake_result_t res = {0};
-    if (!audio || !audio->wn_iface || !audio->wn_model_data) return res;
+    if (!audio) return res;
 
     if (board_audio_mic_start(audio) != ESP_OK) return res;
 
-    int chunk_samples = audio->wn_iface->get_samp_chunksize(audio->wn_model_data);
-    if (chunk_samples > MAX_CHUNK_SAMPLES) return res;
-
+    int chunk_samples = MAX_CHUNK_SAMPLES;
     const uint32_t chunk_wait_ticks = pdMS_TO_TICKS(50); // Timeout
 
     size_t need_int32 = chunk_samples * 2;
@@ -169,7 +135,7 @@ board_audio_wake_result_t board_audio_process_wake_word(board_audio_t *audio)
 
     for (size_t sample_idx = 0, out_idx = 0; out_idx < chunk_samples; ++out_idx, sample_idx += 2) {
         int16_t sample = mic_sample_to_int16(audio->raw_buffer[sample_idx]);
-        audio->detect_buf[out_idx] = sample;
+        // No detect_buf needed anymore
         
         uint32_t abs_sample = (sample < 0) ? -sample : sample;
         if (abs_sample > peak) peak = abs_sample;
@@ -182,19 +148,9 @@ board_audio_wake_result_t board_audio_process_wake_word(board_audio_t *audio)
 
     float detection_score = (float)peak / 32768.0f;
     if (detection_score > 1.0f) detection_score = 1.0f;
-    // Note: this is "volume score", not wakenet score.
-    // WakeNet score comes from detect() result logic inside wakenet libs usually?
-    // Actually esp_wn_iface->detect returns integer state.
-    // The "score" in original code `detection_score` was actually normalized peak volume! 
-    // Wait, original code `float detection_score = (float)peak / 32768.0f;` Yes.
     
     res.score = detection_score; 
-
-    wakenet_state_t wn_res = audio->wn_iface->detect(audio->wn_model_data, audio->detect_buf);
-    
-    if (wn_res == WAKENET_DETECTED) {
-        res.detected = true;
-    }
+    res.detected = false; // Legacy Wakenet removed
 
     return res;
 }

@@ -12,6 +12,7 @@
 #include "nvs_flash.h"
 #include "esp_system.h"
 #include "esp_random.h"
+#include "esp_wifi.h" // [1.1.43] For WiFi shutdown before audio
 
 // Modules
 #include "board_types.h"
@@ -26,6 +27,7 @@
 #include "board_status.h"
 #include "audio_player.h"
 #include "tts_client.h"
+#include "wake_word_runtime.h" // [1.1.27]
 
 #define TAG_STATE "STATE"
 #define TAG_FEATURE "FEATURE"
@@ -66,6 +68,9 @@ static bool g_requested_face_active = false;
 static volatile chat_state_t g_chat_state = CHAT_IDLE;
 #define CHAT_DISPLAY_MAX_CHARS 200
 
+// [1.1.27] Global Score
+float last_score = 0.0f;
+
 // Pipeline Globals
 typedef enum {
     PIPE_IDLE,
@@ -79,6 +84,8 @@ static bool g_pipeline_active = false;
 static bool g_pipe_claimed = false;
 static pipe_stage_t g_pipe_stage = PIPE_IDLE;
 static TaskHandle_t g_pipe_task = NULL;
+// [1.1.34] Global Task Handle
+static TaskHandle_t g_wakeword_task_handle = NULL;
 
 static int16_t *g_audio_buf = NULL;
 static size_t g_audio_buf_samples = 0;
@@ -167,34 +174,37 @@ static int64_t g_wake_block_until_ms = 0;
 static char g_wake_block_msg[16] = {0};
 static int64_t g_ai_wake_until_ms = 0;
 
+
 void board_wakeword_notify(float score) {
     int64_t now_ms = esp_timer_get_time() / 1000;
     
     if (g_pipeline_active || g_pipe_claimed) return; // Busy
     
-    if (tts_client_is_busy() || audio_player_is_playing()) {
-         snprintf(g_wake_block_msg, sizeof(g_wake_block_msg), "BUSY");
-         g_wake_block_until_ms = now_ms + 600;
-         g_wake_gate.cooldown_until_ms = now_ms + 400;
-         return;
-    }
-    
-    if (!board_can_network()) {
-         snprintf(g_wake_block_msg, sizeof(g_wake_block_msg), "OFFLINE");
-         g_wake_block_until_ms = now_ms + 1500;
-         board_set_ai_text("Wi-Fi not connected", 2000);
-         g_wake_gate.cooldown_until_ms = now_ms + 800;
-         return;
-    }
-    
+    // [1.1.38] Safe-Update Transition: Handover
     g_ai_wake_until_ms = now_ms + 600;
     g_wake_accepted = true;
     g_wake_accepted_until_ms = now_ms + 1000;
     g_wake_gate.cooldown_until_ms = now_ms + WAKE_COOLDOWN_MS;
     
-    ESP_LOGI(TAG_FEATURE, "WAKE ACCEPTED score=%.2f", score);
+    ESP_LOGI(TAG_FEATURE, "WAKE ACCEPTED score=%.2f -> HANDOVER START", score);
+    board_set_ai_text("WOKE UP!", 2000);
     
-    // Trigger Pipeline
+    // 1. Stop Mic & Flush (Save RAM)
+    if (g_wakeword_task_handle) {
+        vTaskSuspend(g_wakeword_task_handle);
+    }
+    // board_audio_mic_stop(g_audio); // Optional: if deep clear needed
+    
+    // 2. Start WiFi (Handover)
+    if (g_net) {
+        board_network_connect(g_net);
+        board_set_ai_text("Wi-Fi Starting...", 1000);
+    }
+    
+    // [1.1.35] Heap Analytics
+    ESP_LOGI("MEM", "Free Heap (Wake Handover): %d", (int)esp_get_free_heap_size());
+
+    // Trigger Pipeline (It will wait for WiFi)
     if (g_pipe_task == NULL) {
         xTaskCreate(pipe_task, "pipe_task", 8192, NULL, 5, &g_pipe_task);
     } else {
@@ -204,25 +214,141 @@ void board_wakeword_notify(float score) {
 
 // --- Logic Ticks ---
 
-static void wakeword_poll_tick(uint32_t now_ticks) {
-    if (!g_audio) return;
-    int64_t now_ms = esp_timer_get_time() / 1000;
-    
-    if (g_ai_state != AI_IDLE) return;
-    if (g_pipeline_active || g_pipe_claimed) return;
-    if (now_ms < g_wake_gate.cooldown_until_ms) return;
-    if (tts_client_is_busy() || audio_player_is_playing()) return;
+// [1.1.28] Wake Word Task
+#define EI_WINDOW_SAMPLES 16000 // 1 Second window @ 16kHz
+#define EI_SLIDE_SAMPLES 3200   // 200ms slide
 
-    board_audio_wake_result_t res = board_audio_process_wake_word(g_audio);
+// [1.1.43] Skip startup frames to avoid initial RMS spike
+#define FRAMES_TO_SKIP 15  // Skip first ~3 seconds (15 * 200ms)
+
+// [1.1.44] Moving Average Debounce for flexibility
+#define SCORE_HISTORY_SIZE 3
+#define AVG_SCORE_THRESHOLD 0.7f  // Average score needed
+#define RMS_GATE_THRESHOLD 600.0f  // Lowered for softer speech
+
+static uint32_t frame_count = 0;
+static float score_history[SCORE_HISTORY_SIZE] = {0};
+static uint8_t history_index = 0;
+static bool history_filled = false;
+
+static void wakeword_task(void *arg) {
+    // [1.1.37] Static Buffer Lockdown
+    int16_t *window_buf = wake_word_get_window_buffer(); 
+    // Clear initial buffer
+    memset(window_buf, 0, 16000 * sizeof(int16_t));
     
-    g_mic_level_ema = 0.8f * g_mic_level_ema + 0.2f * res.score; // Simple EMA
+    int32_t *raw_buf = (int32_t*)malloc(EI_SLIDE_SAMPLES * sizeof(int32_t)); // Temp raw buffer
     
-    bool energy_ok = (res.rms >= WAKE_MIN_ENERGY_RMS);
-    bool score_ok = (res.score >= 0.6f); 
-    
-    if (res.detected && energy_ok && score_ok) {
-        board_wakeword_notify(res.score);
+    ESP_LOGI("WW_TASK", "Started Edge Impulse Wake Word Task (Static Buffer)");
+
+    while(1) {
+        // [1.1.38] Suspend check (should be handled by vTaskSuspend logic, but safety first)
+        if (!g_audio || g_ai_state != AI_IDLE || g_pipeline_active || g_pipe_claimed || 
+            tts_client_is_busy() || audio_player_is_playing()) {
+            vTaskDelay(pdMS_TO_TICKS(100));
+            continue;
+        }
+
+        int64_t now_ms = esp_timer_get_time() / 1000;
+        if (now_ms < g_wake_gate.cooldown_until_ms) {
+            vTaskDelay(pdMS_TO_TICKS(50));
+            continue;
+        }
+        
+        // 1. Capture Slide Chunk
+        esp_err_t err = board_audio_mic_start(g_audio);
+        if (err != ESP_OK) {
+             vTaskDelay(pdMS_TO_TICKS(100));
+             continue;
+        }
+
+        size_t bytes_read = 0;
+        // Read 200ms data
+        err = board_audio_read(g_audio, raw_buf, EI_SLIDE_SAMPLES * sizeof(int32_t), &bytes_read, pdMS_TO_TICKS(300));
+        
+        if (err == ESP_OK && bytes_read > 0) {
+            // Shift window
+            size_t samples_read = bytes_read / sizeof(int32_t);
+            size_t shift_dist = samples_read;
+            
+            // Move old data left
+            memmove(window_buf, window_buf + shift_dist, (EI_WINDOW_SAMPLES - shift_dist) * sizeof(int16_t));
+            
+            int64_t sum_sq = 0;
+
+            // Append new data (convert 32->16) and calc RMS
+            for (size_t i = 0; i < samples_read; i++) {
+                int32_t val = raw_buf[i];
+                // Assuming 12-bit alignment shift from board_audio.c
+                int32_t scaled = val >> 12; 
+                if (scaled > 32767) scaled = 32767;
+                if (scaled < -32768) scaled = -32768;
+                
+                int16_t s16 = (int16_t)scaled;
+                window_buf[(EI_WINDOW_SAMPLES - shift_dist) + i] = s16;
+                
+                sum_sq += (int64_t)s16 * s16;
+            }
+            
+            // [1.1.32] Update Mic Level for UI
+            float rms = (samples_read > 0) ? sqrtf((float)sum_sq / samples_read) : 0.0f;
+            g_mic_level_ema = 0.6f * g_mic_level_ema + 0.4f * rms; // Faster update for UI
+            g_ai_dirty = true; // Trigger redraw
+
+            // 2. Inference
+            float score = 0.0f;
+            if (ei_wake_word_engine_infer(window_buf, EI_WINDOW_SAMPLES, &score)) {
+                last_score = score;
+                // [1.1.43] Skip startup frames to avoid RMS spike
+                if (frame_count < FRAMES_TO_SKIP) {
+                    frame_count++;
+                    ESP_LOGD("WW", "Skipping frame %d/%d", frame_count, FRAMES_TO_SKIP);
+                    continue;  // Skip to next iteration
+                }
+                
+                // [1.1.45] Real-time RMS Logging for mic gain analysis
+                ESP_LOGI("WW", "Score: %.2f (RMS: %.0f)", score, rms);
+
+                // [1.1.44] Moving Average Debounce
+                // Update score history
+                score_history[history_index] = score;
+                history_index = (history_index + 1) % SCORE_HISTORY_SIZE;
+                if (history_index == 0) history_filled = true;
+                
+                // Calculate average score
+                float avg_score = 0.0f;
+                uint8_t count = history_filled ? SCORE_HISTORY_SIZE : (history_index + 1);
+                for (uint8_t i = 0; i < count; i++) {
+                    avg_score += score_history[i];
+                }
+                avg_score /= count;
+                
+                // Check if average score and RMS meet thresholds
+                if (avg_score > AVG_SCORE_THRESHOLD && rms > RMS_GATE_THRESHOLD) {
+                    ESP_LOGI("WW", "MOVING AVG PASSED (%.2f > %.2f, RMS: %.0f) -> HANDOVER", 
+                             avg_score, AVG_SCORE_THRESHOLD, rms);
+                    board_wakeword_notify(score);
+                    
+                    // Clear buffer and reset history
+                    memset(window_buf, 0, 16000 * sizeof(int16_t));
+                    memset(score_history, 0, sizeof(score_history));
+                    history_index = 0;
+                    history_filled = false;
+                    frame_count = 0;  // Reset frame counter after trigger
+                    ESP_LOGW("WW", "Buffer and history cleared after WAKE");
+                } else if (score > WAKE_SCORE_THRESHOLD && rms <= RMS_GATE_THRESHOLD) {
+                    // High score but low RMS = false positive
+                    ESP_LOGD("WW", "Low RMS: %.0f (Score: %.2f, Avg: %.2f)", rms, score, avg_score);
+                } else {
+                    // Low score - just update history
+                    ESP_LOGD("WW", "Avg score: %.2f (Current: %.2f)", avg_score, score);
+                }
+            }
+        }
+        
     }
+    free(raw_buf);
+    vTaskDelete(NULL);
 }
 
 static void boot_set_state(boot_state_t new_state) {
@@ -236,22 +362,26 @@ static void boot_sequence_tick(uint32_t now_ticks) {
     
     switch (g_boot_state) {
         case BOOT_INIT_UI:
-            boot_set_state(BOOT_WIFI_START);
-            board_set_ai_text("Wi-Fi Connecting...", 0);
-            g_boot_timeout_ms = now_ms + BOOT_WIFI_TIMEOUT_MS;
+            // [1.1.43] Total Radio Shutdown - Free RAM for MFCC
+            esp_wifi_stop();
+            esp_wifi_deinit();
+            ESP_LOGI(TAG_STATE, "WiFi Radio Disabled (RAM Freed)");
+            
+            // [1.1.36] Kill-Switch: Skip WiFi, Go strict to Mic
+            boot_set_state(BOOT_MIC_ONLINE);
+            board_set_ai_text("OFFLINE MODE", 0);
+            
+            // [1.1.34] Start WW Task
+            // [1.1.45] Increased stack to 16384 for MFCC + TFLite computation
+            if (g_wakeword_task_handle == NULL) {
+                xTaskCreate(wakeword_task, "ei_ww_task", 32768, NULL, configMAX_PRIORITIES - 1, &g_wakeword_task_handle);
+            }
             break;
         case BOOT_WIFI_START:
+             // Deprecated phase
              break;
         case BOOT_WIFI_WAIT:
-             if (board_network_is_stable(g_net)) {
-                 boot_set_state(BOOT_MIC_ONLINE);
-                 board_set_ai_text("", 0);
-                 g_wifi_stable_detected = true;
-             } else if (now_ms >= g_boot_timeout_ms) {
-                 boot_set_state(BOOT_MIC_OFFLINE);
-                 board_set_ai_text("Offline Mode", 2000);
-                 g_offline_retry_backoff_ms = now_ms + OFFLINE_RETRY_BACKOFF_MS;
-             }
+             // Deprecated phase
              break;
         case BOOT_MIC_ONLINE:
              boot_set_state(BOOT_DONE);
@@ -275,6 +405,11 @@ static void pipe_fail(const char *stage, const char *reason, int code)
     ESP_LOGE("PIPE", "fail stage=%s reason=%s code=%d", stage ? stage : "?", reason ? reason : "?", code);
     board_set_ai_state(AI_ERROR);
     board_set_ai_text("COBA LAGI YA~", 4000);
+    
+    // [1.1.34] Resume WW Task on Fail
+    if (g_wakeword_task_handle) {
+        vTaskResume(g_wakeword_task_handle);
+    }
 }
 
 static void pipe_task(void *arg)
@@ -344,8 +479,18 @@ static void pipe_task(void *arg)
             continue;
         }
 
+        // Wait for Network (Handover from Wake)
+        int net_wait = 0;
+        const int max_net_wait = 200; // 20 seconds (100ms * 200)
+        
+        while (!board_can_network() && net_wait < max_net_wait) {
+             if (net_wait == 0) board_set_ai_text("Connecting...", 0);
+             vTaskDelay(pdMS_TO_TICKS(100));
+             net_wait++;
+        }
+
         if (!board_can_network()) {
-            pipe_fail("S2_STT", "net_gate", ESP_ERR_INVALID_STATE);
+            pipe_fail("S2_STT", "net_timeout", ESP_ERR_TIMEOUT);
             continue;
         }
 
@@ -391,6 +536,13 @@ static void pipe_task(void *arg)
         g_pipeline_active = false;
         g_pipe_stage = PIPE_IDLE;
         board_set_ai_state(AI_IDLE);
+        
+        // [1.1.34] Resume WW Task on specific Success (Idle is safer)
+        if (g_wakeword_task_handle) {
+            vTaskResume(g_wakeword_task_handle);
+        }
+        // [1.1.35] Heap Analytics
+        ESP_LOGI("MEM", "Free Heap (Pipe Done): %d", (int)esp_get_free_heap_size());
     }
 }
 
@@ -474,14 +626,14 @@ void app_main(void)
     g_net = board_network_init();
     cloud_client_init();
     
-    boot_set_state(BOOT_WIFI_WAIT);
-    g_boot_timeout_ms = esp_timer_get_time()/1000 + BOOT_WIFI_TIMEOUT_MS;
+    // boot_set_state(BOOT_WIFI_WAIT); // [1.1.36] Disabled for Kill Switch
+    // g_boot_timeout_ms = esp_timer_get_time()/1000 + BOOT_WIFI_TIMEOUT_MS;
 
     while(1) {
         uint32_t now = xTaskGetTickCount();
         board_network_tick(g_net);
         boot_sequence_tick(now);
-        wakeword_poll_tick(now);
+        // wakeword_poll_tick(now); // Replaced by task
         ai_overlay_tick(now);
         face_anim_tick(now);
         board_display_draw_face(g_disp, g_current_face, g_blink_state, 0, 0, 0);
