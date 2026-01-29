@@ -1,4 +1,4 @@
-# Git ignore for rabot (React Native TypeScript project)
+# Git ignore for rbot (React Native TypeScript project)
 # Keeps build artifacts, node_modules, native caches, IDE files, and large model files out of git.
 
 # Node
@@ -45,9 +45,9 @@ build/
 .env.*.local
 
 # Temporary template/backups
-rabottmp/
-rabottmp.backup/
-rabottmp.orig/
+rbottmp/
+rbottmp.backup/
+rbottmp.orig/
 
 # Large model artifacts (do NOT commit binary model files here)
 models/*.gguf
