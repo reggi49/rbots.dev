@@ -221,15 +221,20 @@ void board_wakeword_notify(float score) {
 // [1.1.43] Skip startup frames to avoid initial RMS spike
 #define FRAMES_TO_SKIP 15  // Skip first ~3 seconds (15 * 200ms)
 
-// [1.1.44] Moving Average Debounce for flexibility
-#define SCORE_HISTORY_SIZE 3
-#define AVG_SCORE_THRESHOLD 0.7f  // Average score needed
-#define RMS_GATE_THRESHOLD 600.0f  // Lowered for softer speech
+// [1.1.48] Relaxed Wake Word Guard - User-Friendly Detection
+#define MIN_RMS_THRESHOLD 1000.0f    // Hard gate: force score=0 if below this
+#define SCORE_HISTORY_SIZE 2         // Reduced for faster detection (was 3)
+#define AVG_SCORE_THRESHOLD 0.80f    // Relaxed average score (was 0.85)
+#define RMS_GATE_THRESHOLD 1000.0f   // Aligned with hard gate (was 1600)
+#define PEAK_SCORE_REQUIRED 0.95f    // Relaxed peak requirement (was 0.99)
+#define HIGH_SCORE_THRESHOLD 0.90f   // Only count scores above this for trigger
 
 static uint32_t frame_count = 0;
 static float score_history[SCORE_HISTORY_SIZE] = {0};
+static float rms_history[SCORE_HISTORY_SIZE] = {0};
 static uint8_t history_index = 0;
 static bool history_filled = false;
+static uint8_t consecutive_zero_frames = 0;
 
 static void wakeword_task(void *arg) {
     // [1.1.37] Static Buffer Lockdown
@@ -306,42 +311,78 @@ static void wakeword_task(void *arg) {
                     continue;  // Skip to next iteration
                 }
                 
+                // [1.1.47] HARD GATE: Zero-Trust RMS Filtering
+                // Force score to 0 if energy is too low (prevents AI hallucination)
+                if (rms < MIN_RMS_THRESHOLD) {
+                    ESP_LOGD("RMS_GATE", "Energy low (%.0f < %.0f), forcing score 0", rms, MIN_RMS_THRESHOLD);
+                    score = 0.0f;
+                    consecutive_zero_frames++;
+                } else {
+                    consecutive_zero_frames = 0;
+                }
+                
                 // [1.1.45] Real-time RMS Logging for mic gain analysis
                 ESP_LOGI("WW", "Score: %.2f (RMS: %.0f)", score, rms);
 
-                // [1.1.44] Moving Average Debounce
-                // Update score history
+                // [1.1.47] Reset history if 3 consecutive zero frames
+                if (consecutive_zero_frames >= SCORE_HISTORY_SIZE) {
+                    memset(score_history, 0, sizeof(score_history));
+                    memset(rms_history, 0, sizeof(rms_history));
+                    history_index = 0;
+                    history_filled = false;
+                    consecutive_zero_frames = 0;
+                    ESP_LOGD("WW", "History reset - 3 consecutive zero frames");
+                }
+
+                // [1.1.46] Strict Moving Average with RMS tracking
+                // Update score and RMS history
                 score_history[history_index] = score;
+                rms_history[history_index] = rms;
                 history_index = (history_index + 1) % SCORE_HISTORY_SIZE;
                 if (history_index == 0) history_filled = true;
                 
-                // Calculate average score
-                float avg_score = 0.0f;
+                // Calculate averages
                 uint8_t count = history_filled ? SCORE_HISTORY_SIZE : (history_index + 1);
+                float avg_score = 0.0f;
+                float avg_rms = 0.0f;
+                float peak_score = 0.0f;
+                
                 for (uint8_t i = 0; i < count; i++) {
                     avg_score += score_history[i];
+                    avg_rms += rms_history[i];
+                    if (score_history[i] > peak_score) {
+                        peak_score = score_history[i];
+                    }
                 }
                 avg_score /= count;
+                avg_rms /= count;
                 
-                // Check if average score and RMS meet thresholds
-                if (avg_score > AVG_SCORE_THRESHOLD && rms > RMS_GATE_THRESHOLD) {
-                    ESP_LOGI("WW", "MOVING AVG PASSED (%.2f > %.2f, RMS: %.0f) -> HANDOVER", 
-                             avg_score, AVG_SCORE_THRESHOLD, rms);
+                // [1.1.48] Relaxed validation for better user experience:
+                // 1. Average score > 0.80 (was 0.85)
+                // 2. Average RMS > 1000 (was 1600)
+                // 3. At least one score >= 0.95 (was 0.99)
+                if (avg_score > AVG_SCORE_THRESHOLD && 
+                    avg_rms > RMS_GATE_THRESHOLD && 
+                    peak_score >= PEAK_SCORE_REQUIRED) {
+                    ESP_LOGI("WW", "RELAXED AVG PASSED (Avg:%.2f>%.2f, AvgRMS:%.0f>%.0f, Peak:%.2f) -> HANDOVER", 
+                             avg_score, AVG_SCORE_THRESHOLD, avg_rms, RMS_GATE_THRESHOLD, peak_score);
                     board_wakeword_notify(score);
                     
                     // Clear buffer and reset history
                     memset(window_buf, 0, 16000 * sizeof(int16_t));
                     memset(score_history, 0, sizeof(score_history));
+                    memset(rms_history, 0, sizeof(rms_history));
                     history_index = 0;
                     history_filled = false;
-                    frame_count = 0;  // Reset frame counter after trigger
+                    frame_count = 0;
+                    consecutive_zero_frames = 0;
                     ESP_LOGW("WW", "Buffer and history cleared after WAKE");
-                } else if (score > WAKE_SCORE_THRESHOLD && rms <= RMS_GATE_THRESHOLD) {
-                    // High score but low RMS = false positive
-                    ESP_LOGD("WW", "Low RMS: %.0f (Score: %.2f, Avg: %.2f)", rms, score, avg_score);
+                } else if (score > 0.5f || rms > 1000.0f) {
+                    // Log noise when there's activity but not valid wake word
+                    ESP_LOGI("WW", "Noise Detected (Score: %.2f, RMS: %.0f) - Gate Closed", score, rms);
                 } else {
-                    // Low score - just update history
-                    ESP_LOGD("WW", "Avg score: %.2f (Current: %.2f)", avg_score, score);
+                    // Quiet - debug level only
+                    ESP_LOGD("WW", "Avg: %.2f, AvgRMS: %.0f, Peak: %.2f", avg_score, avg_rms, peak_score);
                 }
             }
         }

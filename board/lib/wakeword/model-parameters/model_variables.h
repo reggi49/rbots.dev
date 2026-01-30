@@ -61,12 +61,12 @@ ei_dsp_config_mfcc_t ei_dsp_config_889388_5 = {
     ei_dsp_config_889388_5_named_axes, // named axes
     ei_dsp_config_889388_5_named_axes_size, // size of the named axes array
     13, // int num_cepstral
-    0.02f, // float frame_length
+    0.025f, // float frame_length
     0.02f, // float frame_stride
     32, // int num_filters
-    256, // int fft_length
-    101, // int win_size
-    0, // int low_frequency
+    512, // int fft_length
+    0, // int win_size
+    80, // int low_frequency
     0, // int high_frequency
     0.98f, // float pre_cof
     1 // int pre_shift
@@ -76,7 +76,7 @@ const uint8_t ei_dsp_blocks_889388_1_size = 1;
 ei_model_dsp_t ei_dsp_blocks_889388_1[ei_dsp_blocks_889388_1_size] = {
     { // DSP block 5
         5,
-        650, // output size
+        637, // output size
         &extract_mfcc_features, // DSP function pointer
         (void*)&ei_dsp_config_889388_5, // pointer to config struct
         ei_dsp_config_889388_5_axes, // array of offsets into the input stream, one for each axis
@@ -151,9 +151,9 @@ const ei_impulse_t impulse_889388_1 = {
     .project_name = "reggi49-project-1",
     .impulse_id = 1,
     .impulse_name = "Impulse #1",
-    .deploy_version = 3,
+    .deploy_version = 4,
 
-    .nn_input_frame_size = 650,
+    .nn_input_frame_size = 637,
     .raw_sample_count = 16000,
     .raw_samples_per_frame = 1,
     .dsp_input_frame_size = 16000 * 1,
