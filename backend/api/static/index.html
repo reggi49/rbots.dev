@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Guru SD AI – Qwen & Gemma</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+        background: #0f172a;
+        color: #e5e7eb;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        min-height: 100vh;
+        padding: 24px;
+      }
+      .card {
+        width: 100%;
+        max-width: 720px;
+        background: #020617;
+        border-radius: 16px;
+        padding: 20px 24px 24px;
+        box-shadow: 0 18px 45px rgba(0, 0, 0, 0.5);
+        border: 1px solid #1e293b;
+      }
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 16px;
+      }
+      .title {
+        font-size: 1.1rem;
+        font-weight: 600;
+      }
+      .subtitle {
+        font-size: 0.8rem;
+        color: #9ca3af;
+      }
+      .pill {
+        font-size: 0.75rem;
+        padding: 4px 10px;
+        border-radius: 999px;
+        border: 1px solid #22c55e33;
+        background: #022c22;
+        color: #bbf7d0;
+      }
+      label {
+        font-size: 0.8rem;
+        color: #9ca3af;
+        display: block;
+        margin-bottom: 4px;
+      }
+      textarea {
+        width: 100%;
+        min-height: 90px;
+        resize: vertical;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid #1f2937;
+        background: #020617;
+        color: #e5e7eb;
+        outline: none;
+        font: inherit;
+      }
+      textarea:focus {
+        border-color: #4f46e5;
+        box-shadow: 0 0 0 1px #4f46e5aa;
+      }
+      .row {
+        display: flex;
+        gap: 10px;
+        margin-top: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      select {
+        padding: 6px 10px;
+        border-radius: 999px;
+        border: 1px solid #374151;
+        background: #020617;
+        color: #e5e7eb;
+        font-size: 0.8rem;
+      }
+      button {
+        padding: 8px 16px;
+        border-radius: 999px;
+        border: none;
+        background: #4f46e5;
+        color: white;
+        font-size: 0.9rem;
+        font-weight: 500;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
+      .response-card {
+        margin-top: 18px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        background: #020617;
+        border: 1px solid #1f2937;
+        font-size: 0.88rem;
+        white-space: pre-wrap;
+      }
+      .response-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 6px;
+      }
+      .model-badge {
+        font-size: 0.7rem;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: #111827;
+        border: 1px solid #374151;
+        color: #e5e7eb;
+      }
+      .job-id {
+        font-size: 0.7rem;
+        color: #6b7280;
+        user-select: all;
+      }
+      .status {
+        margin-top: 8px;
+        font-size: 0.78rem;
+        color: #9ca3af;
+      }
+      .status.error {
+        color: #fecaca;
+      }
+      .small {
+        font-size: 0.72rem;
+        color: #6b7280;
+        margin-top: 10px;
+      }
+      @media (max-width: 600px) {
+        .card {
+          padding: 18px 16px 20px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="header">
+        <div>
+          <div class="title">Guru SD AI – Qwen & Gemma</div>
+          <div class="subtitle">
+            Gemma = guru junior (jawaban singkat) • Qwen = guru senior
+            (fallback)
+          </div>
+        </div>
+        <span class="pill">Backend: /chat & /chat-gradient</span>
+      </div>
+
+      <div>
+        <label for="msg">Pertanyaan murid</label>
+        <textarea id="msg">Jelaskan apa itu pecahan untuk anak SD.</textarea>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="model">Mode guru</label>
+          <select id="model">
+            <option value="auto">Auto (router pilih sendiri)</option>
+            <option value="gradient">Miss Gradient (Guru baru)</option>
+            <option value="qwen">Pak Qwen (Guru senior)</option>
+            <option value="gemma">Bu Gemma (Guru junior)</option>
+          </select>
+        </div>
+
+        <button id="send">
+          <span id="btn-label">Kirim ke guru</span>
+        </button>
+      </div>
+
+      <div class="response-card" id="response" style="display: none">
+        <div class="response-header">
+          <span class="model-badge" id="model-used">model: -</span>
+          <span class="job-id" id="job-id"></span>
+        </div>
+        <div id="answer"></div>
+      </div>
+
+      <div id="status" class="status"></div>
+
+      <div class="small">
+        Tips: contoh math – <code>2 + 3 x 4 berapa?</code>, contoh konsep –
+        <code>mengapa bulan bisa tampak sabit?</code>
+      </div>
+    </div>
+
+    <script>
+      const ROUTES = {
+        chat: "/chat",
+        gradient: "/chat-gradient",
+      };
+
+      const msgEl = document.getElementById("msg");
+      const modelEl = document.getElementById("model");
+      const sendBtn = document.getElementById("send");
+      const btnLabel = document.getElementById("btn-label");
+      const respCard = document.getElementById("response");
+      const ansEl = document.getElementById("answer");
+      const modelUsedEl = document.getElementById("model-used");
+      const jobIdEl = document.getElementById("job-id");
+      const statusEl = document.getElementById("status");
+
+      // Pesan animasi selama menunggu
+      const loadingMessages = [
+        "Lagi menyusun kata…",
+        "Lagi crosscek jawaban…",
+        "Lagi mikir cara jelasin yang gampang…",
+        "Lagi cek fakta sebentar…",
+        "Lagi cari kata yang pas…",
+        "Lagi runutin penjelasan…",
+        "Lagi rangkai informasi…",
+        "Sedang diproses nih…",
+        "Lagi cari cara terbaik…",
+        "Sebentar, lagi analisis dulu…",
+        "Lagi persiapin jawabannya…",
+        "Tunggu sebentar, lagi dikompilin…",
+        "Lagi otak-atik penjelasannya…",
+        "Sedang disusun, nih…",
+      ];
+
+      let loadingIntervalId = null;
+
+      // Animasi ngetik ala chat
+      function typeText(element, text, speed = 15) {
+        element.textContent = "";
+        let i = 0;
+
+        function step() {
+          if (i < text.length) {
+            element.textContent += text[i];
+            i++;
+            setTimeout(step, speed);
+          }
+        }
+
+        step();
+      }
+
+      async function send() {
+        const message = msgEl.value.trim();
+        if (!message) return;
+
+        // siapkan payload
+        const selected = modelEl.value;
+        const body = { message };
+        let endpoint = ROUTES.chat;
+
+        if (selected === "auto") {
+          endpoint = ROUTES.gradient;
+        } else if (selected === "gradient") {
+          endpoint = ROUTES.gradient;
+        } else if (selected === "qwen") {
+          body.force_model = "qwen";
+          endpoint = ROUTES.chat;
+        } else if (selected === "gemma") {
+          body.force_model = "gemma";
+          endpoint = ROUTES.chat;
+        }
+        // kalau "auto" → tidak kirim force_model
+
+        // UI state sebelum request
+        sendBtn.disabled = true;
+        btnLabel.textContent = "Sedang bertanya...";
+        statusEl.classList.remove("error");
+        respCard.style.display = "block";
+        ansEl.textContent = "";
+        modelUsedEl.textContent = "model: -";
+        jobIdEl.textContent = "";
+
+        // --- start timer & animasi status ---
+        const startTime = performance.now();
+        let elapsedSeconds = 0;
+        let loadingIndex = 0;
+
+        statusEl.textContent = `${loadingMessages[loadingIndex]} (0s)`;
+
+        if (loadingIntervalId) {
+          clearInterval(loadingIntervalId);
+        }
+
+        loadingIntervalId = setInterval(() => {
+          elapsedSeconds += 1;
+          // ganti pesan tiap 3 detik
+          if (elapsedSeconds % 3 === 0) {
+            loadingIndex = (loadingIndex + 1) % loadingMessages.length;
+          }
+          statusEl.textContent = `${loadingMessages[loadingIndex]} (${elapsedSeconds}s)`;
+        }, 1000);
+        // --- end animasi status ---
+
+        try {
+          const res = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+
+          const endTime = performance.now();
+          const totalSeconds = ((endTime - startTime) / 1000).toFixed(2);
+
+          // stop animasi status
+          if (loadingIntervalId) {
+            clearInterval(loadingIntervalId);
+            loadingIntervalId = null;
+          }
+
+          if (!res.ok) {
+            let detail = res.statusText;
+            try {
+              const err = await res.json();
+              if (err && err.detail) detail = err.detail;
+            } catch (_) {}
+            statusEl.textContent = `Terjadi kesalahan (${totalSeconds}s): ${detail}`;
+            statusEl.classList.add("error");
+            return;
+          }
+
+          const data = await res.json();
+
+          // update model, job id
+          modelUsedEl.textContent = `model: ${data.model_used}`;
+          jobIdEl.textContent = `job: ${data.job_id}`;
+
+          // status selesai + waktu + pipeline
+          if (data.pipeline) {
+            statusEl.textContent = `Selesai ✅ dalam waktu ${totalSeconds} detik | pipeline: ${data.pipeline}`;
+          } else {
+            statusEl.textContent = `Selesai ✅ dalam waktu ${totalSeconds} detik`;
+          }
+
+          // animasi ngetik jawaban
+          typeText(ansEl, data.answer, 12);
+        } catch (e) {
+          // stop animasi status kalau error
+          if (loadingIntervalId) {
+            clearInterval(loadingIntervalId);
+            loadingIntervalId = null;
+          }
+          statusEl.textContent = "Gagal menghubungi server: " + e;
+          statusEl.classList.add("error");
+        } finally {
+          sendBtn.disabled = false;
+          btnLabel.textContent = "Kirim ke guru";
+        }
+      }
+
+      sendBtn.addEventListener("click", send);
+      msgEl.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+          e.preventDefault();
+          send();
+        }
+      });
+    </script>
+  </body>
+</html>
