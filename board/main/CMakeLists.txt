@@ -1,16 +1,6 @@
 idf_component_register(
     SRCS
-        "board.c"
-        "cloud_client.c"
-        "command_dispatcher.c"
-        "audio_player.c"
-        "tts_client.c"
-        "wake_word_model.cc"
-        "wake_word_runtime.cc"
-        "../src/board_display.c"
-        "../src/board_network.c"
-        "../src/board_power.c"
-        "../src/board_audio.c"
+        "testboard.c"
     INCLUDE_DIRS
         "."
         "../include"
@@ -23,6 +13,7 @@ idf_component_register(
         esp_http_client
         esp_lcd
         driver
+        spi_flash
         espressif__esp-sr
         json
         lwip

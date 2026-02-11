@@ -1,7 +1,7 @@
 
-# Edge Impulse library for reggi49-project-1
+# Edge Impulse library for Yes/No ESP32-C3
 
-This is a C++ library that lets you run the impulse for "reggi49-project-1" (https://studio.edgeimpulse.com/studio/889388) on any device. It consists of the Edge Impulse inferencing SDK - with implementations of both processing and learning blocks - and your model. You will need to include this library in your project to run your impulse locally.
+This is a C++ library that lets you run the impulse for "Yes/No ESP32-C3" (https://studio.edgeimpulse.com/studio/891417) on any device. It consists of the Edge Impulse inferencing SDK - with implementations of both processing and learning blocks - and your model. You will need to include this library in your project to run your impulse locally.
 
 ## Getting Started
 

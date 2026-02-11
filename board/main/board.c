@@ -13,6 +13,7 @@
 #include "esp_system.h"
 #include "esp_random.h"
 #include "esp_wifi.h" // [1.1.43] For WiFi shutdown before audio
+#include "driver/uart.h"
 
 // Modules
 #include "board_types.h"
@@ -48,6 +49,10 @@ extern const char *g_ui_chat_answer; // Usually in board_status or similar, assu
 #define WAKE_COOLDOWN_MS 1500
 #define WAKE_SCORE_THRESHOLD 0.80f
 #define WAKE_MIN_ENERGY_RMS 3000
+
+#define AUDIO_DUMP_SYNC_WORD_0 0xAA
+#define AUDIO_DUMP_SYNC_WORD_1 0xBB
+#define AUDIO_DUMP_MAX_SAMPLES 80000
 
 // --- Application State ---
 static volatile net_state_t g_net_state = NET_UNKNOWN;
@@ -113,6 +118,10 @@ static bool g_wifi_stable_detected = false;
 // Helpers prototypes
 static void board_set_net_state_internal(net_state_t state);
 static void pipe_task(void *arg);
+static void configure_console_for_binary_dump(void);
+static void binary_dump_sample(int16_t sample);
+static void write_wav_header(uint32_t num_samples);
+static void debug_capture_audio_to_ram(void);
 
 // --- Interface Implementation ---
 
@@ -162,6 +171,148 @@ static void board_set_net_state_internal(net_state_t state) {
     if (g_net) board_network_set_net_state(g_net, state);
 }
 
+static void configure_console_for_binary_dump(void) {
+    setvbuf(stdout, NULL, _IONBF, 0);
+    uart_set_baudrate(UART_NUM_0, 921600);
+}
+
+static void binary_dump_sample(int16_t sample) {
+    static bool sync_sent = false;
+    static uint32_t samples_sent = 0;
+
+    if (samples_sent >= AUDIO_DUMP_MAX_SAMPLES) {
+        return;
+    }
+
+    if (!sync_sent) {
+        const uint8_t sync_word[2] = {AUDIO_DUMP_SYNC_WORD_0, AUDIO_DUMP_SYNC_WORD_1};
+        fwrite(sync_word, 1, sizeof(sync_word), stdout);
+        sync_sent = true;
+    }
+
+    uint8_t sample_bytes[2];
+    sample_bytes[0] = (uint8_t)(sample & 0xFF);
+    sample_bytes[1] = (uint8_t)((sample >> 8) & 0xFF);
+    fwrite(sample_bytes, 1, sizeof(sample_bytes), stdout);
+
+    samples_sent++;
+}
+
+static void write_wav_header(uint32_t num_samples) {
+    uint32_t data_size = num_samples * 2; // 16-bit samples
+    uint32_t file_size = 36 + data_size;
+    
+    // RIFF header
+    fwrite("RIFF", 1, 4, stdout);
+    fwrite(&file_size, 1, 4, stdout);
+    fwrite("WAVE", 1, 4, stdout);
+    
+    // fmt chunk
+    fwrite("fmt ", 1, 4, stdout);
+    uint32_t fmt_size = 16;
+    fwrite(&fmt_size, 1, 4, stdout);
+    uint16_t audio_format = 1; // PCM
+    fwrite(&audio_format, 1, 2, stdout);
+    uint16_t num_channels = 1; // Mono
+    fwrite(&num_channels, 1, 2, stdout);
+    uint32_t sample_rate = 16000;
+    fwrite(&sample_rate, 1, 4, stdout);
+    uint32_t byte_rate = sample_rate * 2; // 16-bit mono
+    fwrite(&byte_rate, 1, 4, stdout);
+    uint16_t block_align = 2;
+    fwrite(&block_align, 1, 2, stdout);
+    uint16_t bits_per_sample = 16;
+    fwrite(&bits_per_sample, 1, 2, stdout);
+    
+    // data chunk
+    fwrite("data", 1, 4, stdout);
+    fwrite(&data_size, 1, 4, stdout);
+}
+
+static void debug_capture_audio_to_ram(void) {
+    ESP_LOGI("CAPTURE", "=== Audio Capture Start ===");
+    
+    const uint32_t target_samples = 32000; // 2 seconds @ 16kHz
+    const size_t buffer_size = target_samples * 2; // 64KB
+    
+    int16_t *buffer = (int16_t *)heap_caps_malloc(buffer_size, MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
+    if (!buffer) {
+        ESP_LOGE("CAPTURE", "Buffer allocation failed!");
+        return;
+    }
+    ESP_LOGI("CAPTURE", "Buffer OK: %d bytes", buffer_size);
+    
+    esp_err_t err = board_audio_mic_start(g_audio);
+    if (err != ESP_OK) {
+        ESP_LOGE("CAPTURE", "Mic start failed: 0x%x", err);
+        free(buffer);
+        return;
+    }
+    ESP_LOGI("CAPTURE", "Mic started");
+    
+    size_t total = 0;
+    int32_t temp[128];
+    int32_t prev1 = 0;
+    int32_t prev2 = 0;
+    
+    while (total < target_samples) {
+        size_t bytes_read = 0;
+        err = board_audio_read(g_audio, temp, sizeof(temp), &bytes_read, pdMS_TO_TICKS(1000));
+        
+        if (err == ESP_OK && bytes_read > 0) {
+            size_t samples = bytes_read / 4;  // 32-bit samples (mono)
+            // INMP441: 24-bit audio in 32-bit container [MSB:LSB = bits 31:8]
+            // Mono mode already outputs LEFT channel only
+            for (size_t i = 0; i < samples && total < target_samples; i++) {
+                // INMP441 outputs 24-bit audio in 32-bit container (bits [31:8])
+                // Step 1: Extract 24-bit data from bits [31:8]
+                int32_t sample_24bit = temp[i] >> 8;
+                
+                // Step 2: Sign-extend from 24-bit to 32-bit
+                if (sample_24bit & 0x00800000) {
+                    sample_24bit |= 0xFF000000;
+                }
+                
+                // Step 3: Scale 24-bit to 16-bit (shift right 8 more bits)
+                int32_t sample_16bit = sample_24bit >> 8;
+                
+                // Step 4: Median-of-3 to suppress crackle (impulsive noise)
+                int32_t a = prev2;
+                int32_t b = prev1;
+                int32_t c = sample_16bit;
+                if (a > b) { int32_t t = a; a = b; b = t; }
+                if (b > c) { int32_t t = b; b = c; c = t; }
+                if (a > b) { int32_t t = a; a = b; b = t; }
+                int32_t filtered = b;
+                prev2 = prev1;
+                prev1 = sample_16bit;
+
+                // Step 5: Clamp to INT16 range
+                if (filtered > INT16_MAX) filtered = INT16_MAX;
+                else if (filtered < INT16_MIN) filtered = INT16_MIN;
+                
+                buffer[total++] = (int16_t)filtered;
+            }
+        }
+    }
+    
+    ESP_LOGI("CAPTURE", "Captured %zu samples", total);
+    
+    // Send marker with explicit flush for Python sync
+    printf("WAV_BEGIN\n");
+    fflush(stdout);
+    vTaskDelay(pdMS_TO_TICKS(10));  // Small delay for serial buffer
+    
+    write_wav_header(total);
+    fwrite(buffer, 2, total, stdout);
+    fflush(stdout);
+    printf("WAV_END\n");
+    fflush(stdout);
+    
+    free(buffer);
+    ESP_LOGI("CAPTURE", "=== Done ===");
+}
+
 // --- Wake Gate / Pipeline ---
 typedef struct {
     int64_t cooldown_until_ms;
@@ -189,11 +340,14 @@ void board_wakeword_notify(float score) {
     ESP_LOGI(TAG_FEATURE, "WAKE ACCEPTED score=%.2f -> HANDOVER START", score);
     board_set_ai_text("WOKE UP!", 2000);
     
-    // 1. Stop Mic & Flush (Save RAM)
+    // [1.1.50] Clean buffer flush before handover (prevents audio leak)
+    int16_t *window_buf = wake_word_get_window_buffer();
+    memset(window_buf, 0, EI_WW_WINDOW_SAMPLES * sizeof(int16_t));
+    
+    // 1. Stop WW Task & Free RAM
     if (g_wakeword_task_handle) {
         vTaskSuspend(g_wakeword_task_handle);
     }
-    // board_audio_mic_stop(g_audio); // Optional: if deep clear needed
     
     // 2. Start WiFi (Handover)
     if (g_net) {
@@ -215,41 +369,42 @@ void board_wakeword_notify(float score) {
 // --- Logic Ticks ---
 
 // [1.1.28] Wake Word Task
-#define EI_WINDOW_SAMPLES 16000 // 1 Second window @ 16kHz
+#define EI_WINDOW_SAMPLES 15488 // ~968ms window @ 16kHz (matches EI model)
 #define EI_SLIDE_SAMPLES 3200   // 200ms slide
 
 // [1.1.43] Skip startup frames to avoid initial RMS spike
 #define FRAMES_TO_SKIP 15  // Skip first ~3 seconds (15 * 200ms)
 
-// [1.1.48] Relaxed Wake Word Guard - User-Friendly Detection
-#define MIN_RMS_THRESHOLD 1000.0f    // Hard gate: force score=0 if below this
-#define SCORE_HISTORY_SIZE 2         // Reduced for faster detection (was 3)
-#define AVG_SCORE_THRESHOLD 0.80f    // Relaxed average score (was 0.85)
-#define RMS_GATE_THRESHOLD 1000.0f   // Aligned with hard gate (was 1600)
-#define PEAK_SCORE_REQUIRED 0.95f    // Relaxed peak requirement (was 0.99)
-#define HIGH_SCORE_THRESHOLD 0.90f   // Only count scores above this for trigger
+// [1.1.50] 4-Class Wake Word Thresholds
+#define MIN_RMS_THRESHOLD 8000.0f    // Stricter gate to suppress noise
+#define RMS_GATE_THRESHOLD 8000.0f   // Validation gate for trigger
+#define YES_SCORE_THRESHOLD 0.50f    // Higher YES threshold against noise spikes
+#define NOISE_SCORE_MAX 0.40f        // Reject if noise score is too high
+#define NO_SCORE_THRESHOLD 0.90f     // Response threshold for "no" class
+#define SCORE_HISTORY_SIZE 2         // Moving average window size
 
 static uint32_t frame_count = 0;
-static float score_history[SCORE_HISTORY_SIZE] = {0};
+static float yes_score_history[SCORE_HISTORY_SIZE] = {0};  // Track YES scores
 static float rms_history[SCORE_HISTORY_SIZE] = {0};
 static uint8_t history_index = 0;
 static bool history_filled = false;
-static uint8_t consecutive_zero_frames = 0;
+static uint8_t consecutive_low_rms = 0;  // Track low RMS frames
 
 static void wakeword_task(void *arg) {
     // [1.1.37] Static Buffer Lockdown
     int16_t *window_buf = wake_word_get_window_buffer(); 
     // Clear initial buffer
-    memset(window_buf, 0, 16000 * sizeof(int16_t));
+    memset(window_buf, 0, EI_WINDOW_SAMPLES * sizeof(int16_t));
     
     int32_t *raw_buf = (int32_t*)malloc(EI_SLIDE_SAMPLES * sizeof(int32_t)); // Temp raw buffer
+    int16_t prev_ei = 0; // For anti-spike limiter
     
     ESP_LOGI("WW_TASK", "Started Edge Impulse Wake Word Task (Static Buffer)");
 
     while(1) {
         // [1.1.38] Suspend check (should be handled by vTaskSuspend logic, but safety first)
         if (!g_audio || g_ai_state != AI_IDLE || g_pipeline_active || g_pipe_claimed || 
-            tts_client_is_busy() || audio_player_is_playing()) {
+            tts_client_is_busy() /* || audio_player_is_playing() */) {  // Speaker disabled
             vTaskDelay(pdMS_TO_TICKS(100));
             continue;
         }
@@ -284,15 +439,29 @@ static void wakeword_task(void *arg) {
             // Append new data (convert 32->16) and calc RMS
             for (size_t i = 0; i < samples_read; i++) {
                 int32_t val = raw_buf[i];
-                // Assuming 12-bit alignment shift from board_audio.c
-                int32_t scaled = val >> 12; 
+                // INMP441: 24-bit audio in bits [31:8]
+                int32_t sample_24bit = val >> 8;
+                if (sample_24bit & 0x00800000) {
+                    sample_24bit |= 0xFF000000;
+                }
+                int32_t scaled = sample_24bit >> 8;
                 if (scaled > 32767) scaled = 32767;
                 if (scaled < -32768) scaled = -32768;
                 
                 int16_t s16 = (int16_t)scaled;
+                // Anti-spike limiter (clamp sudden jumps)
+                int32_t diff = (int32_t)s16 - (int32_t)prev_ei;
+                const int32_t SPIKE_LIMIT = 2000;
+                if (diff > SPIKE_LIMIT) s16 = (int16_t)(prev_ei + SPIKE_LIMIT);
+                else if (diff < -SPIKE_LIMIT) s16 = (int16_t)(prev_ei - SPIKE_LIMIT);
+                prev_ei = s16;
+
                 window_buf[(EI_WINDOW_SAMPLES - shift_dist) + i] = s16;
                 
                 sum_sq += (int64_t)s16 * s16;
+                
+                // Binary dump for external capture: limited to AUDIO_DUMP_MAX_SAMPLES
+                binary_dump_sample(s16);
             }
             
             // [1.1.32] Update Mic Level for UI
@@ -300,89 +469,92 @@ static void wakeword_task(void *arg) {
             g_mic_level_ema = 0.6f * g_mic_level_ema + 0.4f * rms; // Faster update for UI
             g_ai_dirty = true; // Trigger redraw
 
-            // 2. Inference
-            float score = 0.0f;
-            if (ei_wake_word_engine_infer(window_buf, EI_WINDOW_SAMPLES, &score)) {
-                last_score = score;
+            // 2. [1.1.50] 4-Class Inference
+            ei_ww_scores_t scores;
+            if (ei_wake_word_engine_infer_4class(window_buf, EI_WINDOW_SAMPLES, &scores)) {
+                last_score = scores.yes;  // For UI compatibility
+                
                 // [1.1.43] Skip startup frames to avoid RMS spike
                 if (frame_count < FRAMES_TO_SKIP) {
                     frame_count++;
                     ESP_LOGD("WW", "Skipping frame %d/%d", frame_count, FRAMES_TO_SKIP);
-                    continue;  // Skip to next iteration
+                    continue;
                 }
                 
-                // [1.1.47] HARD GATE: Zero-Trust RMS Filtering
-                // Force score to 0 if energy is too low (prevents AI hallucination)
+                // [1.1.50] HARD GATE: Zero-Trust RMS Filtering
+                // Force all scores to 0 if energy is too low (prevents AI hallucination)
                 if (rms < MIN_RMS_THRESHOLD) {
-                    ESP_LOGD("RMS_GATE", "Energy low (%.0f < %.0f), forcing score 0", rms, MIN_RMS_THRESHOLD);
-                    score = 0.0f;
-                    consecutive_zero_frames++;
+                    ESP_LOGD("RMS_GATE", "Energy low (%.0f < %.0f), zeroing scores", rms, MIN_RMS_THRESHOLD);
+                    scores.yes = scores.no = scores.noise = scores.unknown = 0.0f;
+                    consecutive_low_rms++;
                 } else {
-                    consecutive_zero_frames = 0;
+                    consecutive_low_rms = 0;
                 }
                 
-                // [1.1.45] Real-time RMS Logging for mic gain analysis
-                ESP_LOGI("WW", "Score: %.2f (RMS: %.0f)", score, rms);
+                // [1.1.50] Real-time 4-Class Logging
+                ESP_LOGI("WW", "[Y:%.2f | N:%.2f | ?:%.2f | ~:%.2f] RMS:%.0f", 
+                         scores.yes, scores.no, scores.unknown, scores.noise, rms);
 
-                // [1.1.47] Reset history if 3 consecutive zero frames
-                if (consecutive_zero_frames >= SCORE_HISTORY_SIZE) {
-                    memset(score_history, 0, sizeof(score_history));
+                // [1.1.50] Reset history if too many consecutive low RMS frames
+                if (consecutive_low_rms >= SCORE_HISTORY_SIZE + 1) {
+                    memset(yes_score_history, 0, sizeof(yes_score_history));
                     memset(rms_history, 0, sizeof(rms_history));
                     history_index = 0;
                     history_filled = false;
-                    consecutive_zero_frames = 0;
-                    ESP_LOGD("WW", "History reset - 3 consecutive zero frames");
+                    consecutive_low_rms = 0;
+                    ESP_LOGD("WW", "History reset - consecutive low RMS");
                 }
 
-                // [1.1.46] Strict Moving Average with RMS tracking
-                // Update score and RMS history
-                score_history[history_index] = score;
+                // Update YES score and RMS history
+                yes_score_history[history_index] = scores.yes;
                 rms_history[history_index] = rms;
                 history_index = (history_index + 1) % SCORE_HISTORY_SIZE;
                 if (history_index == 0) history_filled = true;
                 
                 // Calculate averages
-                uint8_t count = history_filled ? SCORE_HISTORY_SIZE : (history_index + 1);
-                float avg_score = 0.0f;
-                float avg_rms = 0.0f;
-                float peak_score = 0.0f;
+                uint8_t count = history_filled ? SCORE_HISTORY_SIZE : history_index;
+                if (count == 0) count = 1;  // Prevent division by zero
                 
+                float avg_yes = 0.0f;
+                float avg_rms = 0.0f;
                 for (uint8_t i = 0; i < count; i++) {
-                    avg_score += score_history[i];
+                    avg_yes += yes_score_history[i];
                     avg_rms += rms_history[i];
-                    if (score_history[i] > peak_score) {
-                        peak_score = score_history[i];
-                    }
                 }
-                avg_score /= count;
+                avg_yes /= count;
                 avg_rms /= count;
                 
-                // [1.1.48] Relaxed validation for better user experience:
-                // 1. Average score > 0.80 (was 0.85)
-                // 2. Average RMS > 1000 (was 1600)
-                // 3. At least one score >= 0.95 (was 0.99)
-                if (avg_score > AVG_SCORE_THRESHOLD && 
-                    avg_rms > RMS_GATE_THRESHOLD && 
-                    peak_score >= PEAK_SCORE_REQUIRED) {
-                    ESP_LOGI("WW", "RELAXED AVG PASSED (Avg:%.2f>%.2f, AvgRMS:%.0f>%.0f, Peak:%.2f) -> HANDOVER", 
-                             avg_score, AVG_SCORE_THRESHOLD, avg_rms, RMS_GATE_THRESHOLD, peak_score);
-                    board_wakeword_notify(score);
+                // [1.1.50] YES Trigger: averaged YES + RMS gate + noise guard
+                if (avg_yes > YES_SCORE_THRESHOLD && avg_rms > RMS_GATE_THRESHOLD && scores.noise < NOISE_SCORE_MAX) {
+                    ESP_LOGI("WW", "*** YES DETECTED (%.2f > %.2f) *** -> HANDOVER", 
+                             avg_yes, YES_SCORE_THRESHOLD);
+                    board_wakeword_notify(scores.yes);
                     
                     // Clear buffer and reset history
-                    memset(window_buf, 0, 16000 * sizeof(int16_t));
-                    memset(score_history, 0, sizeof(score_history));
+                    memset(window_buf, 0, EI_WINDOW_SAMPLES * sizeof(int16_t));
+                    memset(yes_score_history, 0, sizeof(yes_score_history));
                     memset(rms_history, 0, sizeof(rms_history));
                     history_index = 0;
                     history_filled = false;
                     frame_count = 0;
-                    consecutive_zero_frames = 0;
-                    ESP_LOGW("WW", "Buffer and history cleared after WAKE");
-                } else if (score > 0.5f || rms > 1000.0f) {
-                    // Log noise when there's activity but not valid wake word
-                    ESP_LOGI("WW", "Noise Detected (Score: %.2f, RMS: %.0f) - Gate Closed", score, rms);
-                } else {
-                    // Quiet - debug level only
-                    ESP_LOGD("WW", "Avg: %.2f, AvgRMS: %.0f, Peak: %.2f", avg_score, avg_rms, peak_score);
+                    consecutive_low_rms = 0;
+                    ESP_LOGW("WW", "Buffer cleared after WAKE -> HANDOVER");
+                }
+                // [1.1.50] NO Response: score > 0.90, reset without handover
+                else if (scores.no > NO_SCORE_THRESHOLD && avg_rms > RMS_GATE_THRESHOLD) {
+                    ESP_LOGI("WW", "*** User said NO (%.2f > %.2f) *** - Resetting", 
+                             scores.no, NO_SCORE_THRESHOLD);
+                    
+                    // Reset history only (no handover)
+                    memset(yes_score_history, 0, sizeof(yes_score_history));
+                    memset(rms_history, 0, sizeof(rms_history));
+                    history_index = 0;
+                    history_filled = false;
+                }
+                // Activity detected but not actionable
+                else if (scores.yes > 0.3f || scores.no > 0.3f) {
+                    ESP_LOGD("WW", "Speech detected (Y:%.2f N:%.2f) - Below threshold", 
+                             scores.yes, scores.no);
                 }
             }
         }
@@ -412,11 +584,12 @@ static void boot_sequence_tick(uint32_t now_ticks) {
             boot_set_state(BOOT_MIC_ONLINE);
             board_set_ai_text("OFFLINE MODE", 0);
             
+            // [DEBUG] Wakeword Task DISABLED for Audio Capture Testing
             // [1.1.34] Start WW Task
             // [1.1.45] Increased stack to 16384 for MFCC + TFLite computation
-            if (g_wakeword_task_handle == NULL) {
-                xTaskCreate(wakeword_task, "ei_ww_task", 32768, NULL, configMAX_PRIORITIES - 1, &g_wakeword_task_handle);
-            }
+            // if (g_wakeword_task_handle == NULL) {
+            //     xTaskCreate(wakeword_task, "ei_ww_task", 32768, NULL, configMAX_PRIORITIES - 1, &g_wakeword_task_handle);
+            // }
             break;
         case BOOT_WIFI_START:
              // Deprecated phase
@@ -467,11 +640,11 @@ static void pipe_task(void *arg)
         
         // Wait for TTS
         int wait_count = 0;
-        while ((tts_client_is_busy() || audio_player_is_playing()) && wait_count < 80) {
+        while ((tts_client_is_busy() /* || audio_player_is_playing() */) && wait_count < 80) {  // Speaker disabled
             vTaskDelay(pdMS_TO_TICKS(100));
             wait_count++;
         }
-        if (tts_client_is_busy() || audio_player_is_playing()) {
+        if (tts_client_is_busy() /* || audio_player_is_playing() */) {  // Speaker disabled
             pipe_fail("S0_BUSY", "tts_busy", 0);
             continue;
         }
@@ -500,8 +673,8 @@ static void pipe_task(void *arg)
                  for(size_t i=0; i<samples_read; i++) {
                      int32_t val = raw_chunk[i];
                      if (total_read_bytes/2 < samples) {
-                         // Conversion (assuming same shift as board_audio.c)
-                         int32_t scaled = val >> 12; 
+                         // [1.1.61] Digital Gain: >>10 (consistent with wakeword_task)
+                         int32_t scaled = val >> 10; 
                          if (scaled > 32767) scaled = 32767;
                          if (scaled < -32768) scaled = -32768;
                          g_audio_buf[total_read_bytes/2] = (int16_t)scaled;
@@ -657,36 +830,30 @@ static void face_anim_tick(uint32_t now_ticks)
 
 void app_main(void)
 {
-    ESP_LOGI(TAG_STATE, "Starting R-BOT (Modular)");
+    configure_console_for_binary_dump();
+    ESP_LOGI("MAIN", "=== Audio Recorder Started ===");
     
-    g_disp = board_display_init();    
-    if (g_disp) board_display_clear(g_disp);
-    g_power = board_power_init();
-    audio_player_init();
+    // ONLY initialize audio - disable everything else to save RAM
     g_audio = board_audio_init();
-    g_net = board_network_init();
-    cloud_client_init();
+    if (!g_audio) {
+        ESP_LOGE("MAIN", "Audio init failed!");
+        return;
+    }
     
-    // boot_set_state(BOOT_WIFI_WAIT); // [1.1.36] Disabled for Kill Switch
-    // g_boot_timeout_ms = esp_timer_get_time()/1000 + BOOT_WIFI_TIMEOUT_MS;
-
+    ESP_LOGI("MAIN", "Audio init OK");
+    
+    // 4-second countdown before recording
+    for (int i = 4; i > 0; i--) {
+        ESP_LOGI("COUNTDOWN", "%d...", i);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+    ESP_LOGI("COUNTDOWN", "Recording NOW!");
+    
+    // Direct call - no task creation to avoid stack issues
+    debug_capture_audio_to_ram();
+    
+    ESP_LOGI("MAIN", "Recording complete. Idle...");
     while(1) {
-        uint32_t now = xTaskGetTickCount();
-        board_network_tick(g_net);
-        boot_sequence_tick(now);
-        // wakeword_poll_tick(now); // Replaced by task
-        ai_overlay_tick(now);
-        face_anim_tick(now);
-        board_display_draw_face(g_disp, g_current_face, g_blink_state, 0, 0, 0);
-        
-        if (g_disp) {
-            static int last_touch = 0;
-            int touch = board_display_get_touch_level(g_disp);
-            if (last_touch == 0 && touch == 1 && !g_pipeline_active) {
-                board_wakeword_notify(0.0f);
-            }
-            last_touch = touch;
-        }
-        vTaskDelay(pdMS_TO_TICKS(30));
+        vTaskDelay(pdMS_TO_TICKS(10000));
     }
 }

@@ -21,21 +21,33 @@
 #define MIC_I2S_SD   3
 
 #define MIC_SAMPLE_RATE 16000
-#define MIC_SAMPLE_ALIGN_SHIFT 12
+// INMP441: 24-bit data in 32-bit container [bits 31:8]
+// First shift right 8 to extract 24-bit, then shift right 8 more to get 16-bit
+#define MIC_SAMPLE_ALIGN_SHIFT 16  // Total shift: 8 (extract) + 8 (scale to 16-bit)
 #define MAX_CHUNK_SAMPLES 512
 
 struct board_audio_s {
     i2s_chan_handle_t rx_handle;
     bool mic_ready;
     
-    int32_t raw_buffer[MAX_CHUNK_SAMPLES * 2]; // Stereo raw
+    int32_t raw_buffer[MAX_CHUNK_SAMPLES * 2]; // Stereo raw (LEFT + RIGHT)
 };
 
 static struct board_audio_s g_audio_instance;
 
-static inline int16_t mic_sample_to_int16(int32_t aligned_sample)
+// Convert INMP441 32-bit sample to 16-bit PCM
+// INMP441 outputs 24-bit audio in bits [31:8] of 32-bit word
+static inline int16_t mic_sample_to_int16(int32_t sample_32bit)
 {
-    int32_t scaled = aligned_sample >> MIC_SAMPLE_ALIGN_SHIFT;
+    // Extract 24-bit data from bits [31:8]
+    int32_t sample_24bit = sample_32bit >> 8;
+    // Sign-extend from 24-bit to 32-bit
+    if (sample_24bit & 0x00800000) {
+        sample_24bit |= 0xFF000000;
+    }
+    // Scale to 16-bit (divide by 256)
+    int32_t scaled = sample_24bit >> 8;
+    // Clamp to prevent overflow
     if (scaled > INT16_MAX) scaled = INT16_MAX;
     else if (scaled < INT16_MIN) scaled = INT16_MIN;
     return (int16_t)scaled;
@@ -58,23 +70,29 @@ esp_err_t board_audio_mic_start(board_audio_t *audio)
     // Rate limit? handled in caller or basic checks
     // Keep it simple here
     
+    // I2S Channel: RX-only (microphone input), no TX (speaker disabled)
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
     chan_cfg.dma_desc_num = 6;
     chan_cfg.dma_frame_num = 256;
     chan_cfg.auto_clear = true;
 
+    // Create RX channel only (second parameter NULL = no TX)
     esp_err_t err = i2s_new_channel(&chan_cfg, NULL, &audio->rx_handle);
     if (err != ESP_OK) return err;
 
+    // I2S Standard Configuration for INMP441
+    // - INMP441 uses I2S Philips standard
+    // - 24-bit audio in 32-bit container
+    // - LEFT channel only (L/R pin connected to GND)
     i2s_std_config_t std_cfg = {
         .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(MIC_SAMPLE_RATE),
-        .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO),
+        .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_MONO),
         .gpio_cfg = {
-            .mclk = I2S_GPIO_UNUSED,
-            .bclk = MIC_I2S_SCK,
-            .ws = MIC_I2S_WS,
-            .dout = I2S_GPIO_UNUSED,
-            .din = MIC_I2S_SD,
+            .mclk = I2S_GPIO_UNUSED,          // MCLK not used
+            .bclk = MIC_I2S_SCK,              // GPIO 4: Bit Clock
+            .ws = MIC_I2S_WS,                 // GPIO 1: Word Select (LRCLK)
+            .dout = I2S_GPIO_UNUSED,          // No speaker output
+            .din = MIC_I2S_SD,                // GPIO 3: Serial Data IN
             .invert_flags = {
                 .mclk_inv = false,
                 .bclk_inv = false,
@@ -82,6 +100,9 @@ esp_err_t board_audio_mic_start(board_audio_t *audio)
             },
         },
     };
+    
+    // INMP441: LEFT channel only (L/R pin = GND selects LEFT)
+    std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_LEFT;
 
     err = i2s_channel_init_std_mode(audio->rx_handle, &std_cfg);
     if (err != ESP_OK) {
