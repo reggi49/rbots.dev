@@ -1,4 +1,5 @@
 #include "board_audio.h"
+#include "board_pins.h"          /* Single source of truth for GPIOs */
 #include <string.h>
 #include <math.h>
 #include <stdlib.h>
@@ -11,14 +12,8 @@
 
 #define TAG "BD_AUDIO"
 
-#if CONFIG_IDF_TARGET_ESP32C3
-#define MIC_I2S_PORT I2S_NUM_0
-#else
-#define MIC_I2S_PORT I2S_NUM_1
-#endif
-#define MIC_I2S_WS   1
-#define MIC_I2S_SCK  4
-#define MIC_I2S_SD   3
+/* Mic uses dedicated I2S port (separate from speaker) */
+#define MIC_I2S_PORT  MIC_I2S_PORT_NUM   /* from board_pins.h */
 
 #define MIC_SAMPLE_RATE 16000
 // INMP441: 24-bit data in 32-bit container [bits 31:8]
@@ -70,33 +65,33 @@ esp_err_t board_audio_mic_start(board_audio_t *audio)
     // Rate limit? handled in caller or basic checks
     // Keep it simple here
     
-    // I2S Channel: RX-only (microphone input), no TX (speaker disabled)
-    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
+    /* I2S Channel: RX-only (microphone input) on dedicated port */
+    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(MIC_I2S_PORT, I2S_ROLE_MASTER);
     chan_cfg.dma_desc_num = 6;
     chan_cfg.dma_frame_num = 256;
     chan_cfg.auto_clear = true;
 
-    // Create RX channel only (second parameter NULL = no TX)
+    /* Create RX channel only (second parameter NULL = no TX) */
     esp_err_t err = i2s_new_channel(&chan_cfg, NULL, &audio->rx_handle);
     if (err != ESP_OK) return err;
 
-    // I2S Standard Configuration for INMP441
-    // - INMP441 uses I2S Philips standard
-    // - 24-bit audio in 32-bit container
-    // - LEFT channel only (L/R pin connected to GND)
+    /* I2S Standard Configuration for INMP441
+     *  - Philips standard, 24-bit data in 32-bit container
+     *  - LEFT channel only (L/R pin → GND)
+     *  - GPIOs from board_pins.h */
     i2s_std_config_t std_cfg = {
         .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(MIC_SAMPLE_RATE),
         .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_MONO),
         .gpio_cfg = {
-            .mclk = I2S_GPIO_UNUSED,          // MCLK not used
-            .bclk = MIC_I2S_SCK,              // GPIO 4: Bit Clock
-            .ws = MIC_I2S_WS,                 // GPIO 1: Word Select (LRCLK)
-            .dout = I2S_GPIO_UNUSED,          // No speaker output
-            .din = MIC_I2S_SD,                // GPIO 3: Serial Data IN
+            .mclk = I2S_GPIO_UNUSED,
+            .bclk = PIN_MIC_I2S_BCK,           /* GPIO 4: Bit Clock        */
+            .ws   = PIN_MIC_I2S_WS,            /* GPIO 1: Word Select      */
+            .dout = I2S_GPIO_UNUSED,            /* No speaker on this port  */
+            .din  = PIN_MIC_I2S_SD,            /* GPIO 2: Serial Data IN   */
             .invert_flags = {
                 .mclk_inv = false,
                 .bclk_inv = false,
-                .ws_inv = false,
+                .ws_inv   = false,
             },
         },
     };

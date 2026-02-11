@@ -1,6 +1,16 @@
 idf_component_register(
     SRCS
-        "testboard.c"
+        "board.c"
+        "audio_player.c"
+        "selftest.c"
+        "cloud_client.c"
+        "command_dispatcher.c"
+        "tts_client.c"
+        "wake_word_runtime.cc"
+        "../src/board_audio.c"
+        "../src/board_display.c"
+        "../src/board_network.c"
+        "../src/board_power.c"
     INCLUDE_DIRS
         "."
         "../include"

@@ -1,4 +1,5 @@
 #include "board_display.h"
+#include "board_pins.h"            /* Single source of truth for GPIOs */
 #include "esp_log.h"
 #include "driver/spi_master.h"
 #include "driver/gpio.h"
@@ -15,12 +16,9 @@
 #define SCREEN_WIDTH   128
 #define SCREEN_HEIGHT  160
 
-#define TFT_CS       7
-#define TFT_DC      10
-#define TFT_RST     21
-#define TFT_SCK      8
-#define TFT_MOSI     9
-#define PIN_TOUCH    0
+/* All TFT / touch pin aliases come from board_pins.h:
+ *   PIN_TFT_CS, PIN_TFT_DC, PIN_TFT_RST, PIN_TFT_SCK, PIN_TFT_MOSI,
+ *   PIN_TFT_BL, PIN_TOUCH                                              */
 
 #define CHAT_RECT_X 4
 #define CHAT_RECT_Y 130
@@ -50,7 +48,7 @@ static esp_err_t st7735_transmit(board_display_t *disp, const uint8_t *data, siz
     if (!disp || !disp->spi_handle) return ESP_FAIL;
     if (len == 0) return ESP_OK;
 
-    gpio_set_level(TFT_DC, is_data ? 1 : 0);
+    gpio_set_level(PIN_TFT_DC, is_data ? 1 : 0);
     spi_transaction_t trans = {
         .length = len * 8,
         .tx_buffer = data
@@ -371,7 +369,7 @@ board_display_t *board_display_init(void)
     gpio_config_t io_conf = {
         .intr_type = GPIO_INTR_DISABLE,
         .mode = GPIO_MODE_OUTPUT,
-        .pin_bit_mask = (1ULL << TFT_DC) | (1ULL << TFT_RST)
+        .pin_bit_mask = (1ULL << PIN_TFT_DC) | (1ULL << PIN_TFT_RST)
     };
     gpio_config(&io_conf);
 
@@ -386,8 +384,8 @@ board_display_t *board_display_init(void)
 
     spi_bus_config_t buscfg = {
         .miso_io_num = -1,
-        .mosi_io_num = TFT_MOSI,
-        .sclk_io_num = TFT_SCK,
+        .mosi_io_num = PIN_TFT_MOSI,
+        .sclk_io_num = PIN_TFT_SCK,
         .quadwp_io_num = -1,
         .quadhd_io_num = -1,
         .max_transfer_sz = SCREEN_WIDTH * SCREEN_HEIGHT * 2
@@ -402,7 +400,7 @@ board_display_t *board_display_init(void)
     spi_device_interface_config_t devcfg = {
         .clock_speed_hz = 26000000,
         .mode = 0,
-        .spics_io_num = TFT_CS,
+        .spics_io_num = PIN_TFT_CS,
         .queue_size = 1
     };
 
@@ -412,9 +410,9 @@ board_display_t *board_display_init(void)
         return NULL;
     }
 
-    gpio_set_level(TFT_RST, 0);
+    gpio_set_level(PIN_TFT_RST, 0);
     vTaskDelay(pdMS_TO_TICKS(20));
-    gpio_set_level(TFT_RST, 1);
+    gpio_set_level(PIN_TFT_RST, 1);
     vTaskDelay(pdMS_TO_TICKS(120));
 
     st7735_send_command(&g_display_instance, 0x01);

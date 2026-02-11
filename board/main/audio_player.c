@@ -1,4 +1,5 @@
 #include "audio_player.h"
+#include "board_pins.h"            /* Single source of truth for GPIOs */
 
 #include "driver/i2s_std.h"
 #include "esp_log.h"
@@ -7,9 +8,8 @@
 #include "freertos/task.h"
 #include "freertos/ringbuf.h"
 
-#define PIN_I2S_WS 1
-#define PIN_I2S_SCK 4
-#define PIN_I2S_DOUT 6
+/* Speaker uses its own dedicated I2S port (separate from mic) */
+#define SPK_I2S_PORT  SPK_I2S_PORT_NUM   /* from board_pins.h */
 
 #define AUDIO_VOLUME_SHIFT 1
 #define AUDIO_RING_BUFFER_BYTES (32 * 1024)
@@ -80,7 +80,8 @@ static esp_err_t audio_i2s_init(void)
 {
     if (s_i2s_ready && s_tx_handle) return ESP_OK;
 
-    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_AUTO, I2S_ROLE_MASTER);
+    /* Speaker TX on dedicated I2S port (separate from mic RX) */
+    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(SPK_I2S_PORT, I2S_ROLE_MASTER);
     esp_err_t err = i2s_new_channel(&chan_cfg, &s_tx_handle, NULL);
     if (err != ESP_OK) {
         ESP_LOGE(TAG_AUDIO, "i2s_new_channel fail %d", err);
@@ -92,14 +93,14 @@ static esp_err_t audio_i2s_init(void)
         .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_MONO),
         .gpio_cfg = {
             .mclk = I2S_GPIO_UNUSED,
-            .bclk = PIN_I2S_SCK,
-            .ws = PIN_I2S_WS,
-            .dout = PIN_I2S_DOUT,
-            .din = I2S_GPIO_UNUSED,
+            .bclk = PIN_SPK_I2S_BCK,          /* GPIO 11: Bit Clock       */
+            .ws   = PIN_SPK_I2S_WS,           /* GPIO 12: Word Select     */
+            .dout = PIN_SPK_I2S_DOUT,          /* GPIO  6: Data Out        */
+            .din  = I2S_GPIO_UNUSED,           /* No mic on this port      */
             .invert_flags = {
                 .mclk_inv = false,
                 .bclk_inv = false,
-                .ws_inv = false,
+                .ws_inv   = false,
             },
         },
     };
