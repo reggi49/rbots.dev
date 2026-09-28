@@ -57,5 +57,5 @@
 #define PIN_TFT_SCK              8
 #define PIN_TFT_MOSI             9
 #define PIN_TFT_DC              10
-#define PIN_TFT_RST             16
+#define PIN_TFT_RST             16   /* Connected to GPIO16 now */
 #define PIN_TFT_BL              15   /* Backlight (optional) */

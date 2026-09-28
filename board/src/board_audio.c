@@ -25,7 +25,7 @@ struct board_audio_s {
     i2s_chan_handle_t rx_handle;
     bool mic_ready;
     
-    int32_t raw_buffer[MAX_CHUNK_SAMPLES * 2]; // Stereo raw (LEFT + RIGHT)
+    int32_t raw_buffer[MAX_CHUNK_SAMPLES]; // Mono raw samples
 };
 
 static struct board_audio_s g_audio_instance;
@@ -137,7 +137,7 @@ board_audio_wake_result_t board_audio_process_wake_word(board_audio_t *audio)
     int chunk_samples = MAX_CHUNK_SAMPLES;
     const uint32_t chunk_wait_ticks = pdMS_TO_TICKS(50); // Timeout
 
-    size_t need_int32 = chunk_samples * 2;
+    size_t need_int32 = chunk_samples;
     size_t bytes_read = 0;
     
     // Read directly into persistent buffer
@@ -149,8 +149,8 @@ board_audio_wake_result_t board_audio_process_wake_word(board_audio_t *audio)
     uint32_t peak = 0;
     uint64_t sum_sq = 0;
 
-    for (size_t sample_idx = 0, out_idx = 0; out_idx < chunk_samples; ++out_idx, sample_idx += 2) {
-        int16_t sample = mic_sample_to_int16(audio->raw_buffer[sample_idx]);
+    for (size_t out_idx = 0; out_idx < chunk_samples; ++out_idx) {
+        int16_t sample = mic_sample_to_int16(audio->raw_buffer[out_idx]);
         // No detect_buf needed anymore
         
         uint32_t abs_sample = (sample < 0) ? -sample : sample;
@@ -194,7 +194,7 @@ esp_err_t board_audio_capture_window(board_audio_t *audio, int16_t *buf, size_t 
         }
 
         size_t int32_count = bytes_read / sizeof(int32_t);
-        for (size_t i = 0; i < int32_count; i += 2) {
+        for (size_t i = 0; i < int32_count; i++) {
             if (filled >= samples) break;
             int16_t s = mic_sample_to_int16(temp_buf[i]);
             buf[filled++] = s;

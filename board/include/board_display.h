@@ -19,6 +19,11 @@ board_display_t* board_display_init(void);
 void board_display_clear(board_display_t *display);
 
 /**
+ * @brief Fill the screen with a solid RGB565 color
+ */
+void board_display_fill_color(board_display_t *display, uint16_t rgb565);
+
+/**
  * @brief Draw the robot face
  */
 void board_display_draw_face(board_display_t *display, face_state_t face, blink_state_t blink, int8_t off_x, int8_t off_y, int8_t off_size);

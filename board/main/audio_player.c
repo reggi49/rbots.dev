@@ -11,7 +11,7 @@
 /* Speaker uses its own dedicated I2S port (separate from mic) */
 #define SPK_I2S_PORT  SPK_I2S_PORT_NUM   /* from board_pins.h */
 
-#define AUDIO_VOLUME_SHIFT 1
+#define AUDIO_VOLUME_SHIFT 0   /* Set to 0 for full volume test (normally 1 for safety) */
 #define AUDIO_RING_BUFFER_BYTES (32 * 1024)
 #define AUDIO_MAX_FRAME_SAMPLES 256
 
@@ -28,10 +28,19 @@ static void audio_task(void *arg)
     (void)arg;
     size_t total_played = 0;
     int64_t last_log_us = 0;
+    uint32_t frame_count = 0;
+    
+    ESP_LOGI(TAG_AUDIO, "Audio task started");
+    
     while (true) {
         size_t item_size = 0;
         uint8_t *item = (uint8_t *)xRingbufferReceive(s_audio_rb, &item_size, portMAX_DELAY);
         if (!item) continue;
+
+        // Log first receive
+        if (frame_count == 0) {
+            ESP_LOGI(TAG_AUDIO, "First audio data received: %u bytes", item_size);
+        }
 
         size_t offset = 0;
         while (offset + 1 < item_size) {
@@ -40,33 +49,48 @@ static void audio_task(void *arg)
             if (samples > AUDIO_MAX_FRAME_SAMPLES) {
                 samples = AUDIO_MAX_FRAME_SAMPLES;
             }
-            int32_t frame[AUDIO_MAX_FRAME_SAMPLES];
+            int16_t frame_stereo[AUDIO_MAX_FRAME_SAMPLES * 2];
             for (size_t i = 0; i < samples; i++) {
                 int16_t s = (int16_t)(item[offset + i * 2] | (item[offset + i * 2 + 1] << 8));
                 s >>= AUDIO_VOLUME_SHIFT;
-                frame[i] = ((int32_t)s) << 16;
+                frame_stereo[i * 2] = s;
+                frame_stereo[i * 2 + 1] = s;
             }
 
-            size_t bytes_to_write = samples * sizeof(int32_t);
+            // Log first frame values
+            if (frame_count == 0) {
+                ESP_LOGI(TAG_AUDIO, "First frame: samples=%u L=%d R=%d", 
+                         samples, (int)frame_stereo[0], (int)frame_stereo[1]);
+            }
+
+            size_t bytes_to_write = samples * 2 * sizeof(int16_t);
             size_t written = 0;
             // Use i2s_std channel write
             if (s_tx_handle) {
-                esp_err_t err = i2s_channel_write(s_tx_handle, frame, bytes_to_write, &written, portMAX_DELAY);
+                esp_err_t err = i2s_channel_write(s_tx_handle, frame_stereo, bytes_to_write, &written, portMAX_DELAY);
                 if (err != ESP_OK) {
                     ESP_LOGE(TAG_AUDIO, "i2s_channel_write fail %d", err);
                     break;
                 }
+                
+                // Log first successful write
+                if (frame_count == 0) {
+                    ESP_LOGI(TAG_AUDIO, "First I2S write: bytes=%u written=%u", bytes_to_write, written);
+                }
             } else {
-                // If handle invalid, just drop or break
+                ESP_LOGE(TAG_AUDIO, "TX handle is NULL!");
                 break;
             }
 
             total_played += written;
+            frame_count++;
+            
             int64_t now = esp_timer_get_time();
             if (now - last_log_us >= 1000000) {
                 size_t free_bytes = xRingbufferGetCurFreeSize(s_audio_rb);
                 size_t used_bytes = AUDIO_RING_BUFFER_BYTES - free_bytes;
-                ESP_LOGD(TAG_AUDIO, "bytes_played=%u rb_used=%u", (unsigned)total_played, (unsigned)used_bytes);
+                ESP_LOGI(TAG_AUDIO, "bytes_played=%u rb_used=%u frames=%u", 
+                         (unsigned)total_played, (unsigned)used_bytes, frame_count);
                 last_log_us = now;
             }
             offset += samples * 2;
@@ -78,7 +102,14 @@ static void audio_task(void *arg)
 
 static esp_err_t audio_i2s_init(void)
 {
-    if (s_i2s_ready && s_tx_handle) return ESP_OK;
+    if (s_i2s_ready && s_tx_handle) {
+        ESP_LOGI(TAG_AUDIO, "I2S already initialized");
+        return ESP_OK;
+    }
+
+    ESP_LOGI(TAG_AUDIO, "Initializing I2S speaker on port %d", SPK_I2S_PORT);
+    ESP_LOGI(TAG_AUDIO, "I2S GPIO: BCLK=%d WS=%d DOUT=%d", 
+             PIN_SPK_I2S_BCK, PIN_SPK_I2S_WS, PIN_SPK_I2S_DOUT);
 
     /* Speaker TX on dedicated I2S port (separate from mic RX) */
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(SPK_I2S_PORT, I2S_ROLE_MASTER);
@@ -87,10 +118,11 @@ static esp_err_t audio_i2s_init(void)
         ESP_LOGE(TAG_AUDIO, "i2s_new_channel fail %d", err);
         return err;
     }
+    ESP_LOGI(TAG_AUDIO, "I2S channel created");
 
     i2s_std_config_t std_cfg = {
         .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(16000),
-        .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_MONO),
+        .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO),
         .gpio_cfg = {
             .mclk = I2S_GPIO_UNUSED,
             .bclk = PIN_SPK_I2S_BCK,          /* GPIO 11: Bit Clock       */
@@ -112,11 +144,13 @@ static esp_err_t audio_i2s_init(void)
         s_tx_handle = NULL;
         return err;
     }
+    ESP_LOGI(TAG_AUDIO, "I2S channel configured (Philips mode, 16-bit, stereo L/R dup)");
 
     /* Enable moved to start */
     /* err = i2s_channel_enable(s_tx_handle); */
     
     s_i2s_ready = true;
+    ESP_LOGI(TAG_AUDIO, "I2S init complete");
     return ESP_OK;
 }
 
@@ -147,6 +181,8 @@ esp_err_t audio_player_start(uint32_t sample_rate_hz)
     esp_err_t err = audio_player_init();
     if (err != ESP_OK) return err;
 
+    ESP_LOGI(TAG_AUDIO, "Starting audio player @ %d Hz", sample_rate_hz);
+
     // Install I2S driver if not already done
     err = audio_i2s_init();
     if (err != ESP_OK) return err;
@@ -154,6 +190,7 @@ esp_err_t audio_player_start(uint32_t sample_rate_hz)
     if (sample_rate_hz == 0) sample_rate_hz = 16000;
     
     // Reconfigure clock if needed (optional optimization: only if changed)
+    ESP_LOGI(TAG_AUDIO, "Reconfiguring I2S clock to %d Hz", sample_rate_hz);
     i2s_std_clk_config_t clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(sample_rate_hz);
     err = i2s_channel_reconfig_std_clock(s_tx_handle, &clk_cfg);
     if (err != ESP_OK) {
@@ -162,12 +199,14 @@ esp_err_t audio_player_start(uint32_t sample_rate_hz)
     }
 
     if (!s_started) {
+        ESP_LOGI(TAG_AUDIO, "Enabling I2S channel...");
         err = i2s_channel_enable(s_tx_handle);
         if (err != ESP_OK) {
             ESP_LOGE(TAG_AUDIO, "i2s_channel_enable fail %d", err);
             return err;
         }
         s_started = true;
+        ESP_LOGI(TAG_AUDIO, "I2S channel ENABLED and ready");
     }
     return ESP_OK;
 }
@@ -180,10 +219,6 @@ void audio_player_stop(void)
         i2s_channel_disable(s_tx_handle);
         s_started = false;
     }
-    
-    i2s_del_channel(s_tx_handle);
-    s_tx_handle = NULL;
-    s_i2s_ready = false;
 }
 
 void audio_player_flush(void)

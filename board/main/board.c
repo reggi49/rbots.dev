@@ -14,6 +14,8 @@
 #include "esp_random.h"
 #include "esp_wifi.h" // [1.1.43] For WiFi shutdown before audio
 #include "driver/uart.h"
+#include "driver/gpio.h"
+#include "board_pins.h"
 
 // Modules
 #include "board_types.h"
@@ -29,6 +31,7 @@
 #include "audio_player.h"
 #include "tts_client.h"
 #include "wake_word_runtime.h" // [1.1.27]
+#include "selftest.h"
 
 #define TAG_STATE "STATE"
 #define TAG_FEATURE "FEATURE"
@@ -53,6 +56,14 @@ extern const char *g_ui_chat_answer; // Usually in board_status or similar, assu
 #define AUDIO_DUMP_SYNC_WORD_0 0xAA
 #define AUDIO_DUMP_SYNC_WORD_1 0xBB
 #define AUDIO_DUMP_MAX_SAMPLES 80000
+#define DEBUG_CAPTURE_MODE_RAW 0
+#define DEBUG_CAPTURE_MODE_DSP 1
+#define DEBUG_CAPTURE_MODE_SWEET 2
+#define DEBUG_CAPTURE_ATTEN_BITS 0  // 0=normal, 1=-6dB, 2=-12dB
+#define DEBUG_CAPTURE_RAW_LINEAR_GAIN 1.30f
+#ifndef DEBUG_CAPTURE_MODE
+#define DEBUG_CAPTURE_MODE DEBUG_CAPTURE_MODE_RAW
+#endif
 
 // --- Application State ---
 static volatile net_state_t g_net_state = NET_UNKNOWN;
@@ -173,7 +184,9 @@ static void board_set_net_state_internal(net_state_t state) {
 
 static void configure_console_for_binary_dump(void) {
     setvbuf(stdout, NULL, _IONBF, 0);
+#if !defined(CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG)
     uart_set_baudrate(UART_NUM_0, 921600);
+#endif
 }
 
 static void binary_dump_sample(int16_t sample) {
@@ -230,10 +243,17 @@ static void write_wav_header(uint32_t num_samples) {
 }
 
 static void debug_capture_audio_to_ram(void) {
-    ESP_LOGI("CAPTURE", "=== Audio Capture Start ===");
+    ESP_LOGI("CAPTURE", "=== Audio Capture Start (5 seconds) ===");
+#if DEBUG_CAPTURE_MODE == DEBUG_CAPTURE_MODE_RAW
+    ESP_LOGI("CAPTURE", "Capture mode: RAW (no DSP)");
+#elif DEBUG_CAPTURE_MODE == DEBUG_CAPTURE_MODE_SWEET
+    ESP_LOGI("CAPTURE", "Capture mode: SWEET (atten + soft limiter + makeup gain)");
+#else
+    ESP_LOGI("CAPTURE", "Capture mode: DSP (HPF+LPF+expander+limiter)");
+#endif
     
-    const uint32_t target_samples = 32000; // 2 seconds @ 16kHz
-    const size_t buffer_size = target_samples * 2; // 64KB
+    const uint32_t target_samples = 80000; // 5 seconds @ 16kHz (was 32000 = 2 sec)
+    const size_t buffer_size = target_samples * 2; // 160KB
     
     int16_t *buffer = (int16_t *)heap_caps_malloc(buffer_size, MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);
     if (!buffer) {
@@ -248,12 +268,54 @@ static void debug_capture_audio_to_ram(void) {
         free(buffer);
         return;
     }
-    ESP_LOGI("CAPTURE", "Mic started");
+    ESP_LOGI("CAPTURE", "Mic started - capturing 5 seconds...");
     
     size_t total = 0;
     int32_t temp[128];
-    int32_t prev1 = 0;
-    int32_t prev2 = 0;
+    int64_t start_ms = esp_timer_get_time() / 1000;
+    // Capture DSP chain (enabled in DEBUG_CAPTURE_MODE_DSP):
+    // 1) HPF biquad (~90 Hz) to remove DC/rumble
+    // 2) LPF biquad (~6.0 kHz) to reduce hiss
+    // 3) Very light expander + soft limiter (balanced mode)
+#if DEBUG_CAPTURE_MODE == DEBUG_CAPTURE_MODE_DSP
+    const float fs = 16000.0f;
+    const float q = 0.7071f;
+
+    // RBJ biquad coefficients (computed once per capture session)
+    float hp_x1 = 0.0f, hp_x2 = 0.0f, hp_y1 = 0.0f, hp_y2 = 0.0f;
+    float lp_x1 = 0.0f, lp_x2 = 0.0f, lp_y1 = 0.0f, lp_y2 = 0.0f;
+
+    float hp_fc = 90.0f;
+    float hp_w0 = 2.0f * (float)M_PI * hp_fc / fs;
+    float hp_cosw0 = cosf(hp_w0);
+    float hp_sinw0 = sinf(hp_w0);
+    float hp_alpha = hp_sinw0 / (2.0f * q);
+    float hp_b0 = (1.0f + hp_cosw0) * 0.5f;
+    float hp_b1 = -(1.0f + hp_cosw0);
+    float hp_b2 = (1.0f + hp_cosw0) * 0.5f;
+    float hp_a0 = 1.0f + hp_alpha;
+    float hp_a1 = -2.0f * hp_cosw0;
+    float hp_a2 = 1.0f - hp_alpha;
+    hp_b0 /= hp_a0; hp_b1 /= hp_a0; hp_b2 /= hp_a0;
+    hp_a1 /= hp_a0; hp_a2 /= hp_a0;
+
+    float lp_fc = 6000.0f;
+    float lp_w0 = 2.0f * (float)M_PI * lp_fc / fs;
+    float lp_cosw0 = cosf(lp_w0);
+    float lp_sinw0 = sinf(lp_w0);
+    float lp_alpha = lp_sinw0 / (2.0f * q);
+    float lp_b0 = (1.0f - lp_cosw0) * 0.5f;
+    float lp_b1 = 1.0f - lp_cosw0;
+    float lp_b2 = (1.0f - lp_cosw0) * 0.5f;
+    float lp_a0 = 1.0f + lp_alpha;
+    float lp_a1 = -2.0f * lp_cosw0;
+    float lp_a2 = 1.0f - lp_alpha;
+    lp_b0 /= lp_a0; lp_b1 /= lp_a0; lp_b2 /= lp_a0;
+    lp_a1 /= lp_a0; lp_a2 /= lp_a0;
+
+    const float output_gain = 0.68f; // Headroom to reduce clip risk
+    float env = 0.0f;
+#endif
     
     while (total < target_samples) {
         size_t bytes_read = 0;
@@ -273,30 +335,89 @@ static void debug_capture_audio_to_ram(void) {
                     sample_24bit |= 0xFF000000;
                 }
                 
-                // Step 3: Scale 24-bit to 16-bit (shift right 8 more bits)
-                int32_t sample_16bit = sample_24bit >> 8;
-                
-                // Step 4: Median-of-3 to suppress crackle (impulsive noise)
-                int32_t a = prev2;
-                int32_t b = prev1;
-                int32_t c = sample_16bit;
-                if (a > b) { int32_t t = a; a = b; b = t; }
-                if (b > c) { int32_t t = b; b = c; c = t; }
-                if (a > b) { int32_t t = a; a = b; b = t; }
-                int32_t filtered = b;
-                prev2 = prev1;
-                prev1 = sample_16bit;
+                // Step 3: Scale 24-bit to 16-bit (neutral, no extra boost)
+                int32_t sample_scaled = sample_24bit >> (8 + DEBUG_CAPTURE_ATTEN_BITS);
+                int32_t sample_16bit = sample_scaled;
+                if (sample_16bit > INT16_MAX) sample_16bit = INT16_MAX;
+                else if (sample_16bit < INT16_MIN) sample_16bit = INT16_MIN;
 
-                // Step 5: Clamp to INT16 range
-                if (filtered > INT16_MAX) filtered = INT16_MAX;
-                else if (filtered < INT16_MIN) filtered = INT16_MIN;
-                
-                buffer[total++] = (int16_t)filtered;
+#if DEBUG_CAPTURE_MODE == DEBUG_CAPTURE_MODE_RAW
+                // Model-friendly RAW path: linear only (no non-linear DSP).
+                float y = (float)sample_scaled * DEBUG_CAPTURE_RAW_LINEAR_GAIN;
+                int32_t out = (int32_t)y;
+                if (out > INT16_MAX) out = INT16_MAX;
+                else if (out < INT16_MIN) out = INT16_MIN;
+                buffer[total++] = (int16_t)out;
+#elif DEBUG_CAPTURE_MODE == DEBUG_CAPTURE_MODE_SWEET
+                float y = (float)sample_16bit;
+                float abs_y = fabsf(y);
+                const float limit_start = 12000.0f;
+                if (abs_y > limit_start) {
+                    float sign = (y < 0.0f) ? -1.0f : 1.0f;
+                    float over = abs_y - limit_start;
+                    y = sign * (limit_start + (over * 0.18f));
+                }
+                // Slight makeup gain after limiting to recover clarity.
+                y *= 1.22f;
+                int32_t out = (int32_t)y;
+                if (out > INT16_MAX) out = INT16_MAX;
+                else if (out < INT16_MIN) out = INT16_MIN;
+                buffer[total++] = (int16_t)out;
+#else
+                // Step 4: HPF biquad
+                float x = (float)sample_16bit;
+                float hp = (hp_b0 * x) + (hp_b1 * hp_x1) + (hp_b2 * hp_x2)
+                         - (hp_a1 * hp_y1) - (hp_a2 * hp_y2);
+                hp_x2 = hp_x1; hp_x1 = x;
+                hp_y2 = hp_y1; hp_y1 = hp;
+
+                // Step 5: LPF biquad
+                float lp = (lp_b0 * hp) + (lp_b1 * lp_x1) + (lp_b2 * lp_x2)
+                         - (lp_a1 * lp_y1) - (lp_a2 * lp_y2);
+                lp_x2 = lp_x1; lp_x1 = hp;
+                lp_y2 = lp_y1; lp_y1 = lp;
+
+                // Step 6: Very light expander (no hard gate)
+                float abs_lp = fabsf(lp);
+                env = (0.995f * env) + (0.005f * abs_lp);
+                float t = 900.0f;
+                float target_gain = 1.0f;
+                if (env < t && t > 1.0f) {
+                    float r = env / t;
+                    target_gain = 0.80f + (0.20f * r * r);
+                }
+
+                float y = lp * output_gain * target_gain;
+
+                // Step 7: Soft limiter for occasional peaks before int16 clamp.
+                float abs_y = fabsf(y);
+                const float limit_start = 15000.0f;
+                if (abs_y > limit_start) {
+                    float sign = (y < 0.0f) ? -1.0f : 1.0f;
+                    float over = abs_y - limit_start;
+                    y = sign * (limit_start + (over * 0.18f));
+                }
+
+                int32_t out = (int32_t)y;
+                if (out > INT16_MAX) out = INT16_MAX;
+                else if (out < INT16_MIN) out = INT16_MIN;
+
+                buffer[total++] = (int16_t)out;
+#endif
             }
+        }
+        
+        // Progress log every 1 second
+        int64_t now_ms = esp_timer_get_time() / 1000;
+        if ((now_ms - start_ms) % 1000 < 100) {
+            uint32_t progress_sec = (now_ms - start_ms) / 1000;
+            ESP_LOGD("CAPTURE", "Progress: %u sec / 5 sec", progress_sec);
         }
     }
     
-    ESP_LOGI("CAPTURE", "Captured %zu samples", total);
+    board_audio_mic_stop(g_audio);
+    
+    ESP_LOGI("CAPTURE", "Captured %zu samples (%.1f seconds)", total, (float)total / 16000.0f);
     
     // Send marker with explicit flush for Python sync
     printf("WAV_BEGIN\n");
@@ -382,6 +503,11 @@ void board_wakeword_notify(float score) {
 #define NOISE_SCORE_MAX 0.40f        // Reject if noise score is too high
 #define NO_SCORE_THRESHOLD 0.90f     // Response threshold for "no" class
 #define SCORE_HISTORY_SIZE 2         // Moving average window size
+#define WW_AGC_TARGET_RMS 5000.0f
+#define WW_AGC_MIN_GAIN 0.70f
+#define WW_AGC_MAX_GAIN 2.00f
+#define WW_AGC_ADAPT_UP 0.08f
+#define WW_AGC_ADAPT_DOWN 0.02f
 
 static uint32_t frame_count = 0;
 static float yes_score_history[SCORE_HISTORY_SIZE] = {0};  // Track YES scores
@@ -397,7 +523,7 @@ static void wakeword_task(void *arg) {
     memset(window_buf, 0, EI_WINDOW_SAMPLES * sizeof(int16_t));
     
     int32_t *raw_buf = (int32_t*)malloc(EI_SLIDE_SAMPLES * sizeof(int32_t)); // Temp raw buffer
-    int16_t prev_ei = 0; // For anti-spike limiter
+    float ww_agc_gain = 1.0f;
     
     ESP_LOGI("WW_TASK", "Started Edge Impulse Wake Word Task (Static Buffer)");
 
@@ -448,13 +574,11 @@ static void wakeword_task(void *arg) {
                 if (scaled > 32767) scaled = 32767;
                 if (scaled < -32768) scaled = -32768;
                 
-                int16_t s16 = (int16_t)scaled;
-                // Anti-spike limiter (clamp sudden jumps)
-                int32_t diff = (int32_t)s16 - (int32_t)prev_ei;
-                const int32_t SPIKE_LIMIT = 2000;
-                if (diff > SPIKE_LIMIT) s16 = (int16_t)(prev_ei + SPIKE_LIMIT);
-                else if (diff < -SPIKE_LIMIT) s16 = (int16_t)(prev_ei - SPIKE_LIMIT);
-                prev_ei = s16;
+                // Linear AGC (no non-linear DSP) to keep model input level stable.
+                int32_t agc_scaled = (int32_t)lroundf((float)scaled * ww_agc_gain);
+                if (agc_scaled > 32767) agc_scaled = 32767;
+                if (agc_scaled < -32768) agc_scaled = -32768;
+                int16_t s16 = (int16_t)agc_scaled;
 
                 window_buf[(EI_WINDOW_SAMPLES - shift_dist) + i] = s16;
                 
@@ -466,6 +590,13 @@ static void wakeword_task(void *arg) {
             
             // [1.1.32] Update Mic Level for UI
             float rms = (samples_read > 0) ? sqrtf((float)sum_sq / samples_read) : 0.0f;
+            if (rms > 1.0f) {
+                float desired_gain = WW_AGC_TARGET_RMS / rms;
+                if (desired_gain < WW_AGC_MIN_GAIN) desired_gain = WW_AGC_MIN_GAIN;
+                if (desired_gain > WW_AGC_MAX_GAIN) desired_gain = WW_AGC_MAX_GAIN;
+                float adapt = (desired_gain > ww_agc_gain) ? WW_AGC_ADAPT_UP : WW_AGC_ADAPT_DOWN;
+                ww_agc_gain += adapt * (desired_gain - ww_agc_gain);
+            }
             g_mic_level_ema = 0.6f * g_mic_level_ema + 0.4f * rms; // Faster update for UI
             g_ai_dirty = true; // Trigger redraw
 
@@ -828,10 +959,92 @@ static void face_anim_tick(uint32_t now_ticks)
     }
 }
 
+static void cli_task(void *arg) {
+    char line[64];
+    while (1) {
+        if (fgets(line, sizeof(line), stdin) != NULL) {
+            char *p = line;
+            while (*p == ' ' || *p == '\r' || *p == '\n') p++;
+            if (*p == '\0') {
+                vTaskDelay(pdMS_TO_TICKS(50));
+                continue;
+            }
+
+            if (strstr(line, "CMD_RECORD") || strstr(line, "RECORD") || strstr(line, "record") || strstr(line, "REC") || strstr(line, "rec") || *p == 'r' || *p == 'R') {
+                if (g_disp) {
+                    board_display_draw_overlay(g_disp, AI_LISTENING, "RECORDING 5S", WIFI_OFF,
+                                               NET_UNKNOWN, BAT_FULL, false, 0.0f,
+                                               false, 0, "", 0);
+                }
+                selftest_mic_stream(5);
+                if (g_disp) {
+                    board_display_draw_overlay(g_disp, AI_IDLE, "RBOT READY", WIFI_OFF,
+                                               NET_UNKNOWN, BAT_FULL, false, 0.0f,
+                                               false, 0, "", 0);
+                }
+            } else if (strstr(line, "ECHO") || strstr(line, "echo") || strstr(line, "PARROT") || strstr(line, "parrot") || *p == 'e' || *p == 'E') {
+                ESP_LOGI("CLI", "Command received: Mic -> Speaker Loopback (Parrot Test)");
+                if (g_disp) {
+                    board_display_draw_overlay(g_disp, AI_LISTENING, "SPEAK NOW (3S)", WIFI_OFF,
+                                               NET_UNKNOWN, BAT_FULL, false, 0.0f,
+                                               false, 0, "", 0);
+                }
+                selftest_mic_speaker_loopback(3);
+                if (g_disp) {
+                    board_display_draw_overlay(g_disp, AI_IDLE, "RBOT READY", WIFI_OFF,
+                                               NET_UNKNOWN, BAT_FULL, false, 0.0f,
+                                               false, 0, "", 0);
+                }
+            } else if (strstr(line, "PLAY") || strstr(line, "play") || strstr(line, "VOICE") || strstr(line, "voice") || *p == 'p' || *p == 'P') {
+                ESP_LOGI("CLI", "Command received: PLAY human voice on speaker (MAX98357A)");
+                if (g_disp) {
+                    board_display_draw_overlay(g_disp, AI_THINKING, "PLAYING VOICE", WIFI_OFF,
+                                               NET_UNKNOWN, BAT_FULL, false, 0.0f,
+                                               false, 0, "", 0);
+                }
+                selftest_speaker_human_voice();
+                if (g_disp) {
+                    board_display_draw_overlay(g_disp, AI_IDLE, "RBOT READY", WIFI_OFF,
+                                               NET_UNKNOWN, BAT_FULL, false, 0.0f,
+                                               false, 0, "", 0);
+                }
+                printf("PLAY_OK\n");
+                fflush(stdout);
+            } else if (strstr(line, "PING") || strstr(line, "ping")) {
+                printf("PONG\n");
+                fflush(stdout);
+            } else if (strstr(line, "MIC") || strstr(line, "mic")) {
+                ESP_LOGI("CLI", "Command received: Run Mic Level Test");
+                selftest_mic_rms();
+            } else {
+                printf("Commands available: PLAY (speaker audio), REC (stream 5s mic), ECHO (parrot loopback), MIC (level test), PING\n");
+                fflush(stdout);
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+}
+
 void app_main(void)
 {
+#if (defined(CONFIG_TFT_MINIMAL_TEST) && CONFIG_TFT_MINIMAL_TEST) || defined(TFT_MINIMAL_TEST)
+    ESP_LOGI("MAIN", "TFT minimal test mode enabled");
+    selftest_tft_color_cycle();
+    while (1) {
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+#else
     configure_console_for_binary_dump();
     ESP_LOGI("MAIN", "=== Audio Recorder Started ===");
+    
+    // Initialize TFT display
+    ESP_LOGI("MAIN", "Initializing TFT display...");
+    g_disp = board_display_init();
+    if (!g_disp) {
+        ESP_LOGE("MAIN", "TFT init failed!");
+        return;
+    }
+    ESP_LOGI("MAIN", "TFT display initialized");
     
     // ONLY initialize audio - disable everything else to save RAM
     g_audio = board_audio_init();
@@ -842,18 +1055,49 @@ void app_main(void)
     
     ESP_LOGI("MAIN", "Audio init OK");
     
-    // 4-second countdown before recording
-    for (int i = 4; i > 0; i--) {
-        ESP_LOGI("COUNTDOWN", "%d...", i);
-        vTaskDelay(pdMS_TO_TICKS(1000));
-    }
-    ESP_LOGI("COUNTDOWN", "Recording NOW!");
-    
-    // Direct call - no task creation to avoid stack issues
-    debug_capture_audio_to_ram();
-    
-    ESP_LOGI("MAIN", "Recording complete. Idle...");
+    // Setup Touch Sensor (GPIO 14)
+    gpio_config_t touch_cfg = {
+        .pin_bit_mask = (1ULL << PIN_TOUCH),
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&touch_cfg);
+
+    // Display Ready Screen on boot
+    board_display_clear(g_disp);
+    board_display_draw_face(g_disp, FACE_HAPPY, BLINK_OPEN, 0, 0, 0);
+    board_display_draw_overlay(g_disp, AI_IDLE, "RBOT READY", WIFI_OFF,
+                               NET_UNKNOWN, BAT_FULL, false, 0.0f,
+                               false, 0, "", 0);
+
+    // Start CLI task for USB Serial commands immediately
+    xTaskCreate(cli_task, "cli_task", 10240, NULL, 5, NULL);
+
+    ESP_LOGI("MAIN", "\n*** Rbot ready! Send 'PLAY' via Serial or touch GPIO 14 to replay voice ***\n");
+
+    int last_touch = 1;
     while(1) {
-        vTaskDelay(pdMS_TO_TICKS(10000));
+        int touch = gpio_get_level(PIN_TOUCH);
+        if (touch == 0 && last_touch == 1) { // Pressed / touched
+            ESP_LOGI("MAIN", "Touch/Button on GPIO %d pressed! Playing voice...", PIN_TOUCH);
+            board_display_draw_overlay(g_disp, AI_THINKING, "PLAYING VOICE", WIFI_OFF,
+                                       NET_UNKNOWN, BAT_FULL, false, 0.0f,
+                                       false, 0, "", 0);
+            selftest_speaker_human_voice();
+            board_display_draw_overlay(g_disp, AI_IDLE, "RBOT READY", WIFI_OFF,
+                                       NET_UNKNOWN, BAT_FULL, false, 0.0f,
+                                       false, 0, "", 0);
+        }
+        last_touch = touch;
+
+        // Periodic eye blink animation & overlay update
+        uint32_t now = xTaskGetTickCount();
+        face_anim_tick(now);
+        ai_overlay_tick(now);
+
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
+#endif
 }

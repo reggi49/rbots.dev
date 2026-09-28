@@ -17,16 +17,36 @@
 esp_err_t selftest_speaker_tone(void);
 
 /**
+ * @brief Play human voice sample (Prabowo - MyInstants) through MAX98357A speaker.
+ */
+esp_err_t selftest_speaker_human_voice(void);
+
+/**
  * @brief Capture ~1 second of mic audio and log RMS / peak levels.
  *        Verifies INMP441 I2S RX path.
  */
 esp_err_t selftest_mic_rms(void);
 
 /**
+ * @brief Record audio from INMP441 and stream PCM over serial (compatible with audio_audit.py and record_voice.py)
+ */
+esp_err_t selftest_mic_stream(uint32_t duration_sec);
+
+/**
+ * @brief Record from INMP441 mic and immediately play it back on MAX98357A speaker.
+ */
+esp_err_t selftest_mic_speaker_loopback(uint32_t duration_sec);
+
+/**
  * @brief Draw a "READY" splash screen on the ST7735 TFT.
  *        Verifies SPI display path.
  */
 esp_err_t selftest_tft_ready(void);
+
+/**
+ * @brief Cycle full-screen colors (red/green/blue/black) for wiring validation.
+ */
+esp_err_t selftest_tft_color_cycle(void);
 
 /**
  * @brief Poll the touch sensor for 10 seconds and log press events.

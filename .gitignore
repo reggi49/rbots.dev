@@ -57,3 +57,8 @@ models/*.pt
 
 # Optional: lockfiles may be committed depending on workflow
 # package-lock.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/

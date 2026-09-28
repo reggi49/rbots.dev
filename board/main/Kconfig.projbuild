@@ -26,4 +26,11 @@ config RBOT_DEBUG_WW_BANNER
     help
         Enables the wake-word model banner prints at boot. Keep OFF in production.
 
+config TFT_MINIMAL_TEST
+    bool "TFT minimal test mode (color cycle only)"
+    default n
+    help
+        If enabled, app_main runs only the TFT color-cycle test and then
+        sleeps forever. No I2S, Wi-Fi, or other peripherals are initialized.
+
 endmenu

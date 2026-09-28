@@ -1,6 +1,7 @@
 #include "board_display.h"
 #include "board_pins.h"            /* Single source of truth for GPIOs */
 #include "esp_log.h"
+#include "sdkconfig.h"
 #include "driver/spi_master.h"
 #include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"
@@ -15,6 +16,30 @@
 
 #define SCREEN_WIDTH   128
 #define SCREEN_HEIGHT  160
+
+#ifndef ST7735_XSTART
+#define ST7735_XSTART 0
+#endif
+
+#ifndef ST7735_YSTART
+#define ST7735_YSTART 0
+#endif
+
+#ifndef ST7735_MADCTL
+#define ST7735_MADCTL 0xA0
+#endif
+
+#ifndef ST7735_COLMOD
+#define ST7735_COLMOD 0x05
+#endif
+
+#ifndef ST7735_USE_NORON
+#define ST7735_USE_NORON 1
+#endif
+
+#ifndef ST7735_USE_INVON
+#define ST7735_USE_INVON 0
+#endif
 
 /* All TFT / touch pin aliases come from board_pins.h:
  *   PIN_TFT_CS, PIN_TFT_DC, PIN_TFT_RST, PIN_TFT_SCK, PIN_TFT_MOSI,
@@ -69,8 +94,19 @@ static esp_err_t st7735_send_data(board_display_t *disp, const uint8_t *data, si
 
 static void tft_set_addr_window(board_display_t *disp, uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1)
 {
-    const uint8_t col_data[] = {0x00, x0, 0x00, x1};
-    const uint8_t row_data[] = {0x00, y0, 0x00, y1};
+    uint16_t xs0 = (uint16_t)x0 + ST7735_XSTART;
+    uint16_t xs1 = (uint16_t)x1 + ST7735_XSTART;
+    uint16_t ys0 = (uint16_t)y0 + ST7735_YSTART;
+    uint16_t ys1 = (uint16_t)y1 + ST7735_YSTART;
+
+    const uint8_t col_data[] = {
+        (uint8_t)(xs0 >> 8), (uint8_t)(xs0 & 0xFF),
+        (uint8_t)(xs1 >> 8), (uint8_t)(xs1 & 0xFF)
+    };
+    const uint8_t row_data[] = {
+        (uint8_t)(ys0 >> 8), (uint8_t)(ys0 & 0xFF),
+        (uint8_t)(ys1 >> 8), (uint8_t)(ys1 & 0xFF)
+    };
 
     st7735_send_command(disp, 0x2A);
     st7735_send_data(disp, col_data, sizeof(col_data));
@@ -366,10 +402,24 @@ board_display_t *board_display_init(void)
 {
     ESP_LOGI(TAG, "TFT init start");
 
+#if PIN_TFT_BL >= 0
+    gpio_config_t bl_conf = {
+        .intr_type = GPIO_INTR_DISABLE,
+        .mode = GPIO_MODE_OUTPUT,
+        .pin_bit_mask = (1ULL << PIN_TFT_BL)
+    };
+    gpio_config(&bl_conf);
+    gpio_set_level(PIN_TFT_BL, 1);
+#endif
+
+    uint64_t io_mask = (1ULL << PIN_TFT_DC);
+#if PIN_TFT_RST >= 0
+    io_mask |= (1ULL << PIN_TFT_RST);
+#endif
     gpio_config_t io_conf = {
         .intr_type = GPIO_INTR_DISABLE,
         .mode = GPIO_MODE_OUTPUT,
-        .pin_bit_mask = (1ULL << PIN_TFT_DC) | (1ULL << PIN_TFT_RST)
+        .pin_bit_mask = io_mask
     };
     gpio_config(&io_conf);
 
@@ -381,6 +431,9 @@ board_display_t *board_display_init(void)
         .pull_down_en = GPIO_PULLDOWN_DISABLE
     };
     gpio_config(&touch_conf);
+
+    ESP_LOGI(TAG, "Configuring SPI with: MOSI=%d, SCK=%d, CS=%d, DC=%d, RST=%d", 
+             PIN_TFT_MOSI, PIN_TFT_SCK, PIN_TFT_CS, PIN_TFT_DC, PIN_TFT_RST);
 
     spi_bus_config_t buscfg = {
         .miso_io_num = -1,
@@ -398,8 +451,13 @@ board_display_t *board_display_init(void)
     }
 
     spi_device_interface_config_t devcfg = {
-        .clock_speed_hz = 26000000,
-        .mode = 0,
+        .clock_speed_hz =
+    #if (defined(CONFIG_TFT_MINIMAL_TEST) && CONFIG_TFT_MINIMAL_TEST) || defined(TFT_MINIMAL_TEST)
+                400000,
+    #else
+            26000000,
+    #endif
+        .mode = 0,               // Try SPI Mode 0 (CPOL=0, CPHA=0)
         .spics_io_num = PIN_TFT_CS,
         .queue_size = 1
     };
@@ -410,34 +468,114 @@ board_display_t *board_display_init(void)
         return NULL;
     }
 
+    // Give the hardware time to stabilize after power-up
+    vTaskDelay(pdMS_TO_TICKS(500));
+
+#if PIN_TFT_RST >= 0
     gpio_set_level(PIN_TFT_RST, 0);
-    vTaskDelay(pdMS_TO_TICKS(20));
+    vTaskDelay(pdMS_TO_TICKS(100));
     gpio_set_level(PIN_TFT_RST, 1);
-    vTaskDelay(pdMS_TO_TICKS(120));
+    vTaskDelay(pdMS_TO_TICKS(200));
+#else
+    // If Hardwired RST, we rely on SW Reset
+    st7735_send_command(&g_display_instance, 0x01); // SWRESET
+    vTaskDelay(pdMS_TO_TICKS(150));
+#endif
 
+    // --- ST7735 Init Sequence ---
+    ESP_LOGI(TAG, "Starting ST7735 Initialization with RST=%d", PIN_TFT_RST);
+    
+    // 1. SWRESET
     st7735_send_command(&g_display_instance, 0x01);
-    vTaskDelay(pdMS_TO_TICKS(120));
+    vTaskDelay(pdMS_TO_TICKS(150));
+
+    // 2. SLPOUT
     st7735_send_command(&g_display_instance, 0x11);
-    vTaskDelay(pdMS_TO_TICKS(120));
+    vTaskDelay(pdMS_TO_TICKS(255));
 
-    const uint8_t madctl = 0x00;
-    const uint8_t colmod = 0x05;
+    // 3. FRMCTR1
+    const uint8_t frmctr1[] = {0x01, 0x2C, 0x2D};
+    st7735_send_command(&g_display_instance, 0xB1);
+    st7735_send_data(&g_display_instance, frmctr1, 3);
+
+    // 4. FRMCTR2
+    st7735_send_command(&g_display_instance, 0xB2);
+    st7735_send_data(&g_display_instance, frmctr1, 3);
+
+    // 5. FRMCTR3
+    const uint8_t frmctr3[] = {0x01, 0x2C, 0x2D, 0x01, 0x2C, 0x2D};
+    st7735_send_command(&g_display_instance, 0xB3);
+    st7735_send_data(&g_display_instance, frmctr3, 6);
+
+    // 6. INVCTR
+    const uint8_t invctr[] = {0x07};
+    st7735_send_command(&g_display_instance, 0xB4);
+    st7735_send_data(&g_display_instance, invctr, 1);
+
+    // 7. PWCTR1
+    const uint8_t pwctr1[] = {0xA2, 0x02, 0x84};
+    st7735_send_command(&g_display_instance, 0xC0);
+    st7735_send_data(&g_display_instance, pwctr1, 3);
+
+    // 8. PWCTR2
+    const uint8_t pwctr2[] = {0xC5};
+    st7735_send_command(&g_display_instance, 0xC1);
+    st7735_send_data(&g_display_instance, pwctr2, 1);
+
+    // 9. PWCTR3
+    const uint8_t pwctr3[] = {0x0A, 0x00};
+    st7735_send_command(&g_display_instance, 0xC2);
+    st7735_send_data(&g_display_instance, pwctr3, 2);
+
+    // 10. PWCTR4
+    const uint8_t pwctr4[] = {0x8A, 0x2A};
+    st7735_send_command(&g_display_instance, 0xC3);
+    st7735_send_data(&g_display_instance, pwctr4, 2);
+
+    // 11. PWCTR5
+    const uint8_t pwctr5[] = {0x8A, 0xEE};
+    st7735_send_command(&g_display_instance, 0xC4);
+    st7735_send_data(&g_display_instance, pwctr5, 2);
+
+    // 12. VMCTR1
+    const uint8_t vmctr1[] = {0x0E};
+    st7735_send_command(&g_display_instance, 0xC5);
+    st7735_send_data(&g_display_instance, vmctr1, 1);
+
+    // 13. INVOFF
+    st7735_send_command(&g_display_instance, 0x20);
+
+    // 14. MADCTL
+    const uint8_t madctl_val = 0xC0;
     st7735_send_command(&g_display_instance, 0x36);
-    st7735_send_data(&g_display_instance, &madctl, 1);
+    st7735_send_data(&g_display_instance, &madctl_val, 1);
+
+    // 15. COLMOD
+    const uint8_t colmod_val = 0x05;
     st7735_send_command(&g_display_instance, 0x3A);
-    st7735_send_data(&g_display_instance, &colmod, 1);
+    st7735_send_data(&g_display_instance, &colmod_val, 1);
 
-    const uint8_t col_range[] = {0x00, 0x00, 0x00, 0x7F};
-    const uint8_t row_range[] = {0x00, 0x00, 0x00, 0x9F};
-    st7735_send_command(&g_display_instance, 0x2A);
-    st7735_send_data(&g_display_instance, col_range, sizeof(col_range));
-    st7735_send_command(&g_display_instance, 0x2B);
-    st7735_send_data(&g_display_instance, row_range, sizeof(row_range));
+    // 16. GMCTRP1
+    const uint8_t gamma_p[] = {0x02, 0x1C, 0x07, 0x12, 0x37, 0x32, 0x29, 0x2D, 0x29, 0x25, 0x2B, 0x39, 0x00, 0x01, 0x03, 0x10};
+    st7735_send_command(&g_display_instance, 0xE0);
+    st7735_send_data(&g_display_instance, gamma_p, 16);
 
+    // 17. GMCTRN1
+    const uint8_t gamma_n[] = {0x03, 0x1D, 0x07, 0x06, 0x2E, 0x2C, 0x29, 0x2D, 0x2E, 0x2E, 0x37, 0x3F, 0x00, 0x00, 0x02, 0x10};
+    st7735_send_command(&g_display_instance, 0xE1);
+    st7735_send_data(&g_display_instance, gamma_n, 16);
+
+    // 18. NORON
+    st7735_send_command(&g_display_instance, 0x13);
+    vTaskDelay(pdMS_TO_TICKS(10));
+
+    // 19. DISPON
     st7735_send_command(&g_display_instance, 0x29);
-    vTaskDelay(pdMS_TO_TICKS(20));
+    vTaskDelay(pdMS_TO_TICKS(100));
 
-    tft_fill_screen(&g_display_instance, color565(0,0,0));
+    tft_fill_screen(&g_display_instance, color565(0,0,0)); // Start BLACK
+
+    // --- End Init Sequence ---
 
     ESP_LOGI(TAG, "TFT init done");
     return &g_display_instance;
@@ -447,6 +585,12 @@ void board_display_clear(board_display_t *disp)
 {
     if (!disp) return;
     tft_fill_screen(disp, color565(0, 0, 0));
+}
+
+void board_display_fill_color(board_display_t *disp, uint16_t rgb565)
+{
+    if (!disp) return;
+    tft_fill_screen(disp, rgb565);
 }
 
 void board_display_draw_face(board_display_t *disp, face_state_t face, blink_state_t blink, int8_t off_x, int8_t off_y, int8_t off_size)
