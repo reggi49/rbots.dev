@@ -10,6 +10,7 @@ idf_component_register(
         "wake_word_runtime.cc"
         "../src/board_audio.c"
         "../src/board_display.c"
+        "../src/board_face.c"
         "../src/board_network.c"
         "../src/board_power.c"
     INCLUDE_DIRS

@@ -25,6 +25,7 @@
 // Modules
 #include "board_types.h"
 #include "board_display.h"
+#include "board_face.h"
 #include "board_network.h"
 #include "board_audio.h"
 #include "board_power.h"
@@ -914,74 +915,6 @@ static void pipe_task(void *arg)
     }
 }
 
-static void ai_overlay_tick(uint32_t now_ticks)
-{
-    int64_t now_ms = esp_timer_get_time() / 1000;
-    if (g_ai_expire_ms > 0 && now_ms >= g_ai_expire_ms) {
-        board_clear_ai_text();
-    }
-
-    if (g_ai_state == AI_THINKING || g_ai_state == AI_LISTENING) {
-        if ((now_ticks - g_ai_anim_last) > pdMS_TO_TICKS(500)) {
-            g_ai_anim_last = now_ticks;
-            g_ai_anim_phase = !g_ai_anim_phase;
-            g_ai_dirty = true;
-        }
-    } else {
-        g_ai_anim_phase = false;
-    }
-
-    // Check for state changes to trigger redraw
-    static net_state_t last_net = (net_state_t)-1;
-    static wifi_status_t last_wifi = (wifi_status_t)-1;
-    static battery_state_t last_bat = (battery_state_t)-1;
-
-    net_state_t curr_net = board_network_get_net_state(g_net);
-    wifi_status_t curr_wifi = board_network_get_status(g_net);
-    battery_state_t curr_bat = board_power_get_state(g_power);
-
-    if (curr_net != last_net || curr_wifi != last_wifi || curr_bat != last_bat) {
-        last_net = curr_net;
-        last_wifi = curr_wifi;
-        last_bat = curr_bat;
-        g_ai_dirty = true;
-    }
-
-    if (g_ai_dirty) {
-        g_ai_dirty = false;
-        bool anim = g_ai_anim_phase;
-        float mic = g_mic_level_ema;
-        if (g_wake_accepted && now_ms > g_wake_accepted_until_ms) g_wake_accepted = false;
-        
-        board_display_draw_overlay(g_disp, g_ai_state, g_ai_text, 
-            curr_wifi,
-            curr_net, curr_bat, 
-            anim, mic, g_wake_accepted, g_wake_block_until_ms, g_wake_block_msg, g_ai_wake_until_ms);
-    }
-}
-
-static void face_anim_tick(uint32_t now_ticks)
-{
-    static uint32_t last_blink = 0;
-    static uint32_t blink_duration = 0;
-    
-    // Initial random start
-    if (last_blink == 0) last_blink = now_ticks;
-
-    // Logic to blink eyes occasionally
-    if (g_blink_state == BLINK_OPEN) {
-        if ((now_ticks - last_blink) > pdMS_TO_TICKS(3000 + (esp_random() % 4000))) {
-            g_blink_state = BLINK_CLOSED;
-            last_blink = now_ticks;
-        }
-    } else if (g_blink_state == BLINK_CLOSED) {
-        if ((now_ticks - last_blink) > pdMS_TO_TICKS(150)) {
-            g_blink_state = BLINK_OPEN;
-            last_blink = now_ticks;
-        }
-    }
-}
-
 static void cli_task(void *arg) {
     char line[64];
 
@@ -1000,7 +933,36 @@ static void cli_task(void *arg) {
             if (strstr(line, "PING") || strstr(line, "ping")) {
                 printf("PONG\r\n");
                 fflush(stdout);
-            } else if (strstr(line, "ECHO") || strstr(line, "echo") || strstr(line, "PARROT") || strstr(line, "parrot") || *p == 'e' || *p == 'E') {
+            } else if (strstr(line, "TEST_FACE") || strstr(line, "test_face") || strstr(line, "DEMO") || strstr(line, "demo")) {
+                ESP_LOGI("CLI", "Command received: Trigger Standalone Face Expression Demo (12 States)");
+                board_face_trigger_demo();
+                printf("DEMO_STARTED\r\n");
+                fflush(stdout);
+            } else if (strstr(line, "METRICS") || strstr(line, "metrics")) {
+                float fps = 0, avg_ms = 0, max_ms = 0;
+                board_face_get_metrics(&fps, &avg_ms, &max_ms);
+                printf("METRICS: FPS=%.1f, AvgRender=%.2fms, MaxRender=%.2fms, FreeHeap=%u, MinFreeHeap=%u, PSRAM=%u\r\n",
+                       fps, avg_ms, max_ms,
+                       (unsigned)esp_get_free_heap_size(),
+                       (unsigned)esp_get_minimum_free_heap_size(),
+                       (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+                fflush(stdout);
+            } else if (strstr(line, "FACE") || strstr(line, "face")) {
+                char *sp = strchr(line, ' ');
+                if (sp) {
+                    while (*sp == ' ') sp++;
+                    if (strstr(sp, "BOOT") || strstr(sp, "boot")) board_face_set_state(FACE_BOOT);
+                    else if (strstr(sp, "IDLE") || strstr(sp, "idle")) board_face_set_state(FACE_IDLE);
+                    else if (strstr(sp, "LISTEN") || strstr(sp, "listen")) board_face_set_state(FACE_LISTENING);
+                    else if (strstr(sp, "THINK") || strstr(sp, "think")) board_face_set_state(FACE_THINKING);
+                    else if (strstr(sp, "SPEAK") || strstr(sp, "speak")) board_face_set_state(FACE_SPEAKING);
+                    else if (strstr(sp, "HAPPY") || strstr(sp, "happy")) board_face_trigger_happy(2500);
+                    else if (strstr(sp, "ERR") || strstr(sp, "err")) board_face_set_error(FACE_ERR_SERVER, "TEST ERR");
+                    else if (strstr(sp, "OFFLINE") || strstr(sp, "offline") || strstr(sp, "DISC")) board_face_set_state(FACE_DISCONNECTED);
+                    printf("FACE_SET_OK\r\n");
+                    fflush(stdout);
+                }
+            } else if (strstr(line, "ECHO") || strstr(line, "echo") || strstr(line, "PARROT") || strstr(line, "parrot")) {
                 uint32_t dur = 3;
                 char *sp = strchr(line, ' ');
                 if (sp) {
@@ -1099,7 +1061,7 @@ static void cli_task(void *arg) {
                     voice_chat_set_backend_url(sp + 1);
                 }
             } else {
-                printf("Commands: PING, TONE, PLAY, ECHO, MIC, TFT, RECORD [sec], TALK [sec]\r\n");
+                printf("Commands: PING, TEST_FACE, METRICS, FACE [STATE], TALK [sec], RECORD [sec], ECHO [sec], PLAY, TONE, TFT, MIC\r\n");
                 fflush(stdout);
             }
         }
@@ -1135,13 +1097,9 @@ void app_main(void)
     esp_rom_printf("✅ [APP_MAIN] TFT display initialized\r\n");
     ESP_LOGI("MAIN", "TFT display initialized");
 
-    // Display Ready Screen on boot immediately
-    board_display_clear(g_disp);
-    board_display_draw_face(g_disp, FACE_HAPPY, BLINK_OPEN, 0, 0, 0);
-    board_display_draw_overlay(g_disp, AI_IDLE, "RBOT READY", WIFI_CONNECTING,
-                               NET_UNKNOWN, BAT_FULL, false, 0.0f,
-                               false, 0, "", 0);
-    esp_rom_printf("✅ [APP_MAIN] TFT Ready Screen drawn!\r\n");
+    // Initialize Expressive Face Animation Engine (Starts Boot animation)
+    board_face_init(g_disp);
+    esp_rom_printf("✅ [APP_MAIN] Expressive Face Engine initialized\r\n");
 
     // 2. Initialize Wi-Fi Network & Voice Chat
     esp_rom_printf("[APP_MAIN] Initializing Wi-Fi network (SSID: rara)...\r\n");
@@ -1173,7 +1131,7 @@ void app_main(void)
     xTaskCreate(cli_task, "cli_task", 8192, NULL, 5, NULL);
     esp_rom_printf("✅ [APP_MAIN] CLI task started!\r\n");
 
-    ESP_LOGI("MAIN", "\n*** Rbot ready! Send 'TALK' / 'ECHO' via Serial or touch GPIO 14 for Voice Chat ***\n");
+    ESP_LOGI("MAIN", "\n*** Rbot ready! Send 'TALK' / 'TEST_FACE' via Serial or touch GPIO 14 for Voice Chat ***\n");
 
     int last_touch = 1;
     while(1) {
@@ -1184,12 +1142,13 @@ void app_main(void)
         }
         last_touch = touch;
 
-        if (g_net) board_network_tick(g_net);
-
-        // Periodic eye blink animation & overlay update
-        uint32_t now = xTaskGetTickCount();
-        face_anim_tick(now);
-        ai_overlay_tick(now);
+        if (g_net) {
+            board_network_tick(g_net);
+            board_face_set_wifi_status(board_network_get_status(g_net));
+        }
+        if (g_power) {
+            board_face_set_battery_state(board_power_get_state(g_power));
+        }
 
         vTaskDelay(pdMS_TO_TICKS(100));
     }

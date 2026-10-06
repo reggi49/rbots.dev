@@ -6,12 +6,14 @@
 #include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include "esp_timer.h"
 #include "esp_attr.h"
 #include "board_types.h"
+#include "board_face.h"
 
 #define TAG "BD_DISP"
 
@@ -63,6 +65,7 @@ struct board_display_s {
 };
 
 static struct board_display_s g_display_instance;
+static SemaphoreHandle_t s_disp_spi_mutex = NULL;
 
 static inline uint16_t color565(uint8_t r, uint8_t g, uint8_t b)
 {
@@ -74,6 +77,10 @@ static esp_err_t st7735_transmit(board_display_t *disp, const uint8_t *data, siz
     if (!disp || !disp->spi_handle) return ESP_FAIL;
     if (len == 0) return ESP_OK;
 
+    if (s_disp_spi_mutex) {
+        xSemaphoreTake(s_disp_spi_mutex, portMAX_DELAY);
+    }
+
     gpio_set_level(PIN_TFT_DC, is_data ? 1 : 0);
     spi_transaction_t trans = {0};
     trans.length = len * 8;
@@ -84,7 +91,13 @@ static esp_err_t st7735_transmit(board_display_t *disp, const uint8_t *data, siz
         trans.tx_buffer = data;
     }
 
-    return spi_device_transmit(disp->spi_handle, &trans);
+    esp_err_t ret = spi_device_transmit(disp->spi_handle, &trans);
+
+    if (s_disp_spi_mutex) {
+        xSemaphoreGive(s_disp_spi_mutex);
+    }
+
+    return ret;
 }
 
 static esp_err_t st7735_send_command(board_display_t *disp, uint8_t command)
@@ -447,6 +460,10 @@ board_display_t *board_display_init(void)
         return &g_display_instance;
     }
 
+    if (!s_disp_spi_mutex) {
+        s_disp_spi_mutex = xSemaphoreCreateMutex();
+    }
+
     ESP_LOGI(TAG, "TFT init start");
 
 #if PIN_TFT_BL >= 0
@@ -642,8 +659,8 @@ void board_display_fill_color(board_display_t *disp, uint16_t rgb565)
 
 void board_display_draw_face(board_display_t *disp, face_state_t face, blink_state_t blink, int8_t off_x, int8_t off_y, int8_t off_size)
 {
-    if (!disp) return;
-    draw_robot_face(disp, face, blink, off_x, off_y, off_size);
+    (void)disp; (void)blink; (void)off_x; (void)off_y; (void)off_size;
+    board_face_set_state(face);
 }
 
 static void tft_draw_net_badge(board_display_t *disp, net_state_t state, bool phase)
@@ -855,58 +872,21 @@ void board_display_draw_overlay(board_display_t *disp, ai_state_t ai_state, cons
                                 bool anim_phase, float mic_level, bool wake_accepted,
                                 int64_t wake_block_until_ms, const char *wake_block_msg, int64_t ai_wake_until_ms)
 {
-    if (!disp) return;
-    
-    // 1. Wifi Icon
-    {
-        const uint16_t bg = color565(0, 0, 0);
-        const uint16_t fg = color565(255, 255, 255);
-        const uint16_t dim = color565(60, 60, 60);
-        const uint16_t err = color565(255, 50, 50);
-        const uint16_t x0 = 4;
-        const uint16_t y0 = 4;
-        const uint16_t w = 22;
-        const uint16_t h = 16;
-        tft_fill_rect(disp, x0, y0, w, h, bg);
-        const uint16_t base_y = y0 + h - 2;
-        const uint16_t bar_w = 3;
-        const uint16_t gap = 2;
-        const uint16_t bar_h[4] = {3, 6, 9, 12};
-        for (int i = 0; i < 4; i++) {
-            uint16_t bx = x0 + 2 + i * (bar_w + gap);
-            uint16_t by = base_y - bar_h[i];
-            tft_fill_rect(disp, bx, by, bar_w, bar_h[i], dim);
-        }
-        if (wifi_status == WIFI_CONNECTED || wifi_status == WIFI_CONNECTED_STABLE) {
-             for (int i = 0; i < 4; i++) {
-                uint16_t bx = x0 + 2 + i * (bar_w + gap);
-                uint16_t by = base_y - bar_h[i];
-                tft_fill_rect(disp, bx, by, bar_w, bar_h[i], fg);
-            }
-        } else if (wifi_status == WIFI_CONNECTING && anim_phase) {
-             for (int i = 0; i < 2; i++) {
-                uint16_t bx = x0 + 2 + i * (bar_w + gap);
-                uint16_t by = base_y - bar_h[i];
-                tft_fill_rect(disp, bx, by, bar_w, bar_h[i], fg);
-            }
-        } else if (wifi_status == WIFI_ERROR) {
-             for (int i = 0; i < (int)w; i++) {
-                tft_fill_rect(disp, x0 + i, y0 + (i * h) / w, 1, 1, err);
-                tft_fill_rect(disp, x0 + i, y0 + h - 1 - (i * h) / w, 1, 1, err);
-            }
-        }
+    (void)disp; (void)net_state; (void)anim_phase; (void)mic_level; (void)wake_accepted;
+    (void)wake_block_until_ms; (void)wake_block_msg; (void)ai_wake_until_ms;
+
+    switch (ai_state) {
+        case AI_LISTENING: board_face_set_state(FACE_LISTENING); break;
+        case AI_THINKING:  board_face_set_state(FACE_THINKING);  break;
+        case AI_ANSWERING: board_face_set_state(FACE_SPEAKING);  break;
+        case AI_ERROR:     board_face_set_error(FACE_ERR_SERVER, ai_text); break;
+        case AI_IDLE:      board_face_set_state(FACE_IDLE);      break;
     }
-
-    // 2. Net Badge (Legacy)
-    tft_draw_net_badge(disp, net_state, anim_phase);
-
-    // 3. AI Overlay & Status Badge (Legacy)
-    // Draw AI last so the overlay can overwrite if needed, but the top badge might overlap Net
-    // Based on user request, Net is 'left' of Status.
-    tft_draw_ai_overlay_legacy(disp, ai_state, ai_text, anim_phase, ai_wake_until_ms);
-
-    // 4. Battery Icon (Legacy)
-    tft_draw_battery_icon(disp, bat_state, anim_phase);
+    if (ai_text && ai_text[0]) {
+        board_face_set_status_text(ai_text);
+    }
+    board_face_set_wifi_status(wifi_status);
+    board_face_set_battery_state(bat_state);
 }
 
 void board_display_draw_chat(board_display_t *disp, const char *chat_text)
@@ -918,4 +898,28 @@ void board_display_draw_chat(board_display_t *disp, const char *chat_text)
 int board_display_get_touch_level(board_display_t *disp)
 {
     return gpio_get_level(PIN_TOUCH);
+}
+
+esp_err_t board_display_send_bitmap(board_display_t *disp, uint16_t x, uint16_t y, uint16_t w, uint16_t h, const uint16_t *bitmap)
+{
+    if (!disp || !disp->spi_handle || !bitmap) return ESP_FAIL;
+    if (x >= SCREEN_WIDTH || y >= SCREEN_HEIGHT) return ESP_OK;
+    if (x + w > SCREEN_WIDTH) w = SCREEN_WIDTH - x;
+    if (y + h > SCREEN_HEIGHT) h = SCREEN_HEIGHT - y;
+    if (w == 0 || h == 0) return ESP_OK;
+
+    tft_set_addr_window(disp, x, y, x + w - 1, y + h - 1);
+
+    const uint8_t *data = (const uint8_t *)bitmap;
+    size_t remaining_bytes = (size_t)w * h * sizeof(uint16_t);
+    const size_t max_chunk = 4096;
+
+    while (remaining_bytes > 0) {
+        size_t chunk = (remaining_bytes > max_chunk) ? max_chunk : remaining_bytes;
+        esp_err_t err = st7735_send_data(disp, data, chunk);
+        if (err != ESP_OK) return err;
+        data += chunk;
+        remaining_bytes -= chunk;
+    }
+    return ESP_OK;
 }

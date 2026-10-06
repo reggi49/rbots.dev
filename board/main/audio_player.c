@@ -25,6 +25,12 @@ static TaskHandle_t s_audio_task = NULL;
 static i2s_chan_handle_t s_tx_handle = NULL;
 static bool s_i2s_ready = false;
 static bool s_started = false;
+static volatile float s_audio_level = 0.0f;
+
+float audio_player_get_level(void)
+{
+    return s_audio_level;
+}
 
 static void audio_task(void *arg)
 {
@@ -37,8 +43,11 @@ static void audio_task(void *arg)
     
     while (true) {
         size_t item_size = 0;
-        uint8_t *item = (uint8_t *)xRingbufferReceive(s_audio_rb, &item_size, portMAX_DELAY);
-        if (!item) continue;
+        uint8_t *item = (uint8_t *)xRingbufferReceive(s_audio_rb, &item_size, pdMS_TO_TICKS(100));
+        if (!item) {
+            s_audio_level *= 0.5f;
+            continue;
+        }
 
         // Log first receive
         if (frame_count == 0) {
@@ -53,11 +62,19 @@ static void audio_task(void *arg)
                 samples = AUDIO_MAX_FRAME_SAMPLES;
             }
             int16_t frame_stereo[AUDIO_MAX_FRAME_SAMPLES * 2];
+            int32_t frame_sum = 0;
             for (size_t i = 0; i < samples; i++) {
                 int16_t s = (int16_t)(item[offset + i * 2] | (item[offset + i * 2 + 1] << 8));
                 s >>= AUDIO_VOLUME_SHIFT;
                 frame_stereo[i * 2] = s;
                 frame_stereo[i * 2 + 1] = s;
+                int32_t a = (s < 0) ? -s : s;
+                frame_sum += a;
+            }
+            if (samples > 0) {
+                float cur = (float)frame_sum / (samples * 6000.0f);
+                if (cur > 1.0f) cur = 1.0f;
+                s_audio_level = s_audio_level * 0.7f + cur * 0.3f;
             }
 
             // Log first frame values
@@ -218,6 +235,7 @@ esp_err_t audio_player_start(uint32_t sample_rate_hz)
 
 void audio_player_stop(void)
 {
+    s_audio_level = 0.0f;
     if (!s_i2s_ready || !s_tx_handle) return;
     
     if (s_started) {

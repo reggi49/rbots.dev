@@ -5,10 +5,17 @@
 
 // Face Expressions
 typedef enum {
-    FACE_NEUTRAL,
+    FACE_BOOT = 0,
+    FACE_IDLE,
+    FACE_LISTENING,
+    FACE_THINKING,
+    FACE_SPEAKING,
     FACE_HAPPY,
-    FACE_CONFUSED,
-    FACE_ERROR
+    FACE_ERROR,
+    FACE_DISCONNECTED,
+    // Aliases for compatibility with legacy tests
+    FACE_NEUTRAL = FACE_IDLE,
+    FACE_CONFUSED = FACE_THINKING
 } face_state_t;
 
 // Eye Blink State

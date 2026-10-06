@@ -2,6 +2,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include "esp_err.h"
 #include "board_types.h"
 
 // Opaque handle
@@ -45,4 +46,9 @@ void board_display_draw_chat(board_display_t *display, const char *text);
  * @brief Get touch button state
  */
 int board_display_get_touch_level(board_display_t *display);
+
+/**
+ * @brief Push a raw RGB565 bitmap to the display
+ */
+esp_err_t board_display_send_bitmap(board_display_t *display, uint16_t x, uint16_t y, uint16_t w, uint16_t h, const uint16_t *bitmap);
 

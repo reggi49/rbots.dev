@@ -14,6 +14,7 @@
 
 #include "board_types.h"
 #include "board_display.h"
+#include "board_face.h"
 #include "board_audio.h"
 #include "board_network.h"
 #include "board_status.h"
@@ -35,11 +36,28 @@ void voice_chat_set_backend_url(const char *url)
 
 static void update_status(ai_state_t st, const char *msg, bool anim, float level)
 {
-    wifi_status_t wf = board_get_wifi_status();
-    if (g_disp) {
-        board_display_draw_overlay(g_disp, st, msg, wf, NET_UNKNOWN, BAT_FULL,
-                                   anim, level, false, 0, "", 0);
+    (void)anim;
+    (void)level;
+    switch (st) {
+        case AI_LISTENING:
+            board_face_set_state(FACE_LISTENING);
+            break;
+        case AI_THINKING:
+            board_face_set_state(FACE_THINKING);
+            break;
+        case AI_ANSWERING:
+            board_face_set_state(FACE_SPEAKING);
+            break;
+        case AI_ERROR:
+            board_face_set_error(FACE_ERR_SERVER, msg);
+            break;
+        case AI_IDLE:
+        default:
+            board_face_set_state(FACE_IDLE);
+            break;
     }
+    board_face_set_status_text(msg);
+
     printf("STATUS:%s\r\n", msg);
     fflush(stdout);
 }
@@ -92,7 +110,7 @@ esp_err_t voice_chat_trigger_turn(uint32_t duration_sec)
         }
         if (wf != WIFI_CONNECTED && wf != WIFI_CONNECTED_STABLE) {
             ESP_LOGE(TAG_VC, "Wi-Fi connection failed or not ready!");
-            update_status(AI_IDLE, "NO WIFI", false, 0.0f);
+            board_face_set_error(FACE_ERR_WIFI, "NO WIFI");
             return ESP_ERR_INVALID_STATE;
         }
     }
@@ -104,14 +122,14 @@ esp_err_t voice_chat_trigger_turn(uint32_t duration_sec)
     }
     if (!buf) {
         ESP_LOGE(TAG_VC, "Failed to allocate %zu bytes for recording", buf_bytes);
-        update_status(AI_IDLE, "OUT OF MEMORY", false, 0.0f);
+        board_face_set_error(FACE_ERR_GENERIC, "OUT OF MEM");
         return ESP_ERR_NO_MEM;
     }
 
     board_audio_t *audio = board_audio_init();
     if (!audio) {
         free(buf);
-        update_status(AI_IDLE, "AUDIO INIT FAIL", false, 0.0f);
+        board_face_set_error(FACE_ERR_AUDIO, "AUDIO FAIL");
         return ESP_FAIL;
     }
 
@@ -234,7 +252,7 @@ esp_err_t voice_chat_trigger_turn(uint32_t duration_sec)
     esp_http_client_handle_t client = esp_http_client_init(&http_cfg);
     if (!client) {
         ESP_LOGE(TAG_VC, "Failed to initialize HTTP client");
-        update_status(AI_IDLE, "HTTP INIT FAIL", false, 0.0f);
+        board_face_set_error(FACE_ERR_SERVER, "HTTP FAIL");
         free(buf);
         return ESP_FAIL;
     }
@@ -246,7 +264,7 @@ esp_err_t voice_chat_trigger_turn(uint32_t duration_sec)
         ESP_LOGE(TAG_VC, "Failed to open HTTP connection: %d", err);
         esp_http_client_cleanup(client);
         free(buf);
-        update_status(AI_IDLE, "CONN FAIL", false, 0.0f);
+        board_face_set_error(FACE_ERR_SERVER, "CONN FAIL");
         return err;
     }
 
@@ -281,7 +299,7 @@ esp_err_t voice_chat_trigger_turn(uint32_t duration_sec)
         ESP_LOGE(TAG_VC, "Backend returned error HTTP %d", status_code);
         esp_http_client_close(client);
         esp_http_client_cleanup(client);
-        update_status(AI_IDLE, "SERVER ERROR", false, 0.0f);
+        board_face_set_error(FACE_ERR_SERVER, "SERVER ERR");
         return ESP_FAIL;
     }
 
@@ -319,7 +337,9 @@ esp_err_t voice_chat_trigger_turn(uint32_t duration_sec)
     esp_http_client_cleanup(client);
 
     ESP_LOGI(TAG_VC, "=== Voice Chat Turn Finished Successfully ===");
-    update_status(AI_IDLE, "RBOT READY", false, 0.0f);
+    board_face_trigger_happy(1200);
+    printf("STATUS:HAPPY\r\n");
+    fflush(stdout);
 
     return ESP_OK;
 }
