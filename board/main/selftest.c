@@ -358,6 +358,7 @@ static void parrot_status(ai_state_t st, const char *msg, bool anim, float level
 esp_err_t selftest_mic_speaker_loopback(uint32_t duration_sec)
 {
     if (duration_sec == 0) duration_sec = 3;
+    if (duration_sec > 60) duration_sec = 60;
     const uint32_t sample_rate = 16000;
     const uint32_t total_samples = duration_sec * sample_rate;
     const size_t buf_bytes = total_samples * sizeof(int16_t);

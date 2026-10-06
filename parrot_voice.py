@@ -54,13 +54,16 @@ def wait_for_pong(s, timeout=10.0):
     return False
 
 
-def run_parrot(s):
+def run_parrot(s, duration=3):
     s.reset_input_buffer()
-    s.write(b"ECHO\r\n")
+    cmd = f"ECHO {duration}\r\n"
+    s.write(cmd.encode())
     s.flush()
 
     t0 = time.time()
-    while time.time() - t0 < 30.0:
+    # Dynamic timeout based on duration: 3s prep + duration rec + 3s speak prep + duration speak + 10s buffer
+    total_timeout = (duration * 2) + 16.0
+    while time.time() - t0 < total_timeout:
         line = readline(s)
         if not line:
             continue
@@ -84,14 +87,22 @@ def run_parrot(s):
 
 
 def main():
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    loop = "--loop" in sys.argv
-    port = args[0] if args else find_rbot_port()
+    import argparse
+    parser = argparse.ArgumentParser(description="RBOT PARROT (mic -> speaker loopback)")
+    parser.add_argument("port", nargs="?", default=None, help="Serial port")
+    parser.add_argument("--duration", "-d", type=int, default=3, help="Durasi rekaman dalam detik (contoh: 5, 10, 15)")
+    parser.add_argument("--loop", action="store_true", help="Ulangi loop parrot terus-menerus")
+    args = parser.parse_args()
+
+    port = args.port or find_rbot_port()
+    duration = max(1, min(60, args.duration))
 
     print("=" * 60)
     print("🦜 RBOT PARROT  (mic INMP441 -> speaker MAX98357A)")
     print("=" * 60)
-    print(f"Port: {port} @ {BAUD}")
+    print(f"Port    : {port} @ {BAUD}")
+    print(f"Durasi  : {duration} detik")
+    print("=" * 60)
 
     try:
         s = open_port(port)
@@ -110,9 +121,9 @@ def main():
 
     try:
         while True:
-            ok = run_parrot(s)
+            ok = run_parrot(s, duration)
             print("\n🎉 Done!" if ok else "\n⚠️  Parrot did not finish.")
-            if not loop:
+            if not args.loop:
                 break
             input("\nPress Enter to parrot again (Ctrl+C to quit)...")
             print()

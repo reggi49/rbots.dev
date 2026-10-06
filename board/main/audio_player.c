@@ -52,22 +52,21 @@ static void audio_task(void *arg)
             if (samples > AUDIO_MAX_FRAME_SAMPLES) {
                 samples = AUDIO_MAX_FRAME_SAMPLES;
             }
-            static int32_t frame_stereo[AUDIO_MAX_FRAME_SAMPLES * 2];
+            int16_t frame_stereo[AUDIO_MAX_FRAME_SAMPLES * 2];
             for (size_t i = 0; i < samples; i++) {
                 int16_t s = (int16_t)(item[offset + i * 2] | (item[offset + i * 2 + 1] << 8));
                 s >>= AUDIO_VOLUME_SHIFT;
-                int32_t s32 = ((int32_t)s) << 16;
-                frame_stereo[i * 2] = s32;
-                frame_stereo[i * 2 + 1] = s32;
+                frame_stereo[i * 2] = s;
+                frame_stereo[i * 2 + 1] = s;
             }
 
             // Log first frame values
             if (frame_count == 0) {
-                ESP_LOGI(TAG_AUDIO, "First frame: samples=%u L=0x%08x R=0x%08x", 
-                         samples, (unsigned int)frame_stereo[0], (unsigned int)frame_stereo[1]);
+                ESP_LOGI(TAG_AUDIO, "First frame: samples=%u L=%d R=%d", 
+                         (unsigned)samples, (int)frame_stereo[0], (int)frame_stereo[1]);
             }
 
-            size_t bytes_to_write = samples * 2 * sizeof(int32_t);
+            size_t bytes_to_write = samples * 2 * sizeof(int16_t);
             size_t written = 0;
             // Use i2s_std channel write
             if (s_tx_handle) {
@@ -126,7 +125,7 @@ static esp_err_t audio_i2s_init(void)
 
     i2s_std_config_t std_cfg = {
         .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(16000),
-        .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO),
+        .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO),
         .gpio_cfg = {
             .mclk = I2S_GPIO_UNUSED,
             .bclk = PIN_SPK_I2S_BCK,          /* GPIO 11: Bit Clock       */
@@ -149,7 +148,7 @@ static esp_err_t audio_i2s_init(void)
         return err;
     }
 
-    ESP_LOGI(TAG_AUDIO, "I2S channel configured (Philips mode, 32-bit slot, stereo L/R dup)");
+    ESP_LOGI(TAG_AUDIO, "I2S channel configured (Philips mode, 16-bit slot, stereo L/R dup)");
     ESP_LOGI(TAG_AUDIO, "Speaker I2S clocks routed to PRIMARY(BCK=11, WS=12, DOUT=6)");
 
     /* Enable moved to start */

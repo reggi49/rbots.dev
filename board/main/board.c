@@ -1000,8 +1000,14 @@ static void cli_task(void *arg) {
                 printf("PONG\r\n");
                 fflush(stdout);
             } else if (strstr(line, "ECHO") || strstr(line, "echo") || strstr(line, "PARROT") || strstr(line, "parrot") || *p == 'e' || *p == 'E') {
-                ESP_LOGI("CLI", "Command received: Mic -> Speaker Loopback (Parrot Test)");
-                selftest_mic_speaker_loopback(3);
+                uint32_t dur = 3;
+                char *sp = strchr(line, ' ');
+                if (sp) {
+                    int parsed = atoi(sp + 1);
+                    if (parsed > 0 && parsed <= 60) dur = (uint32_t)parsed;
+                }
+                ESP_LOGI("CLI", "Command received: Mic -> Speaker Loopback (Parrot Test, %u s)", (unsigned)dur);
+                selftest_mic_speaker_loopback(dur);
             } else if (strstr(line, "PLAY") || strstr(line, "play") || strstr(line, "VOICE") || strstr(line, "voice") || *p == 'p' || *p == 'P') {
                 ESP_LOGI("CLI", "Command received: PLAY human voice on speaker (MAX98357A)");
                 if (g_disp) {
