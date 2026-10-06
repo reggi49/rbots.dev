@@ -37,6 +37,7 @@
 #include "tts_client.h"
 #include "wake_word_runtime.h" // [1.1.27]
 #include "selftest.h"
+#include "voice_chat.h"
 
 #define TAG_STATE "STATE"
 #define TAG_FEATURE "FEATURE"
@@ -1083,8 +1084,22 @@ static void cli_task(void *arg) {
                                                false, 0, "", 0);
                 }
 
+            } else if (strstr(line, "TALK") || strstr(line, "talk") || strstr(line, "CHAT") || strstr(line, "chat")) {
+                uint32_t dur = 5;
+                char *sp = strchr(line, ' ');
+                if (sp) {
+                    int parsed = atoi(sp + 1);
+                    if (parsed > 0 && parsed <= 15) dur = (uint32_t)parsed;
+                }
+                ESP_LOGI("CLI", "Command received: Voice Chat Turn (%u s)", (unsigned)dur);
+                voice_chat_trigger_turn(dur);
+            } else if (strstr(line, "SET_URL") || strstr(line, "set_url")) {
+                char *sp = strchr(line, ' ');
+                if (sp) {
+                    voice_chat_set_backend_url(sp + 1);
+                }
             } else {
-                printf("Commands: PING, TONE, PLAY, ECHO, MIC, TFT, RECORD [sec]\r\n");
+                printf("Commands: PING, TONE, PLAY, ECHO, MIC, TFT, RECORD [sec], TALK [sec]\r\n");
                 fflush(stdout);
             }
         }
@@ -1123,12 +1138,17 @@ void app_main(void)
     // Display Ready Screen on boot immediately
     board_display_clear(g_disp);
     board_display_draw_face(g_disp, FACE_HAPPY, BLINK_OPEN, 0, 0, 0);
-    board_display_draw_overlay(g_disp, AI_IDLE, "RBOT READY", WIFI_OFF,
+    board_display_draw_overlay(g_disp, AI_IDLE, "RBOT READY", WIFI_CONNECTING,
                                NET_UNKNOWN, BAT_FULL, false, 0.0f,
                                false, 0, "", 0);
     esp_rom_printf("✅ [APP_MAIN] TFT Ready Screen drawn!\r\n");
+
+    // 2. Initialize Wi-Fi Network & Voice Chat
+    esp_rom_printf("[APP_MAIN] Initializing Wi-Fi network (SSID: rara)...\r\n");
+    g_net = board_network_init();
+    voice_chat_init();
     
-    // 2. Initialize audio
+    // 3. Initialize audio
     esp_rom_printf("[APP_MAIN] Initializing audio...\r\n");
     g_audio = board_audio_init();
     if (!g_audio) {
@@ -1139,7 +1159,7 @@ void app_main(void)
     esp_rom_printf("✅ [APP_MAIN] Audio init OK\r\n");
     ESP_LOGI("MAIN", "Audio init OK");
     
-    // 3. Setup Touch Sensor (GPIO 14)
+    // 4. Setup Touch Sensor (GPIO 14)
     gpio_config_t touch_cfg = {
         .pin_bit_mask = (1ULL << PIN_TOUCH),
         .mode = GPIO_MODE_INPUT,
@@ -1149,20 +1169,22 @@ void app_main(void)
     };
     gpio_config(&touch_cfg);
 
-    // 4. Start CLI task for USB Serial commands
+    // 5. Start CLI task for USB Serial commands
     xTaskCreate(cli_task, "cli_task", 8192, NULL, 5, NULL);
     esp_rom_printf("✅ [APP_MAIN] CLI task started!\r\n");
 
-    ESP_LOGI("MAIN", "\n*** Rbot ready! Send 'PLAY' or 'ECHO' via Serial or touch GPIO 14 for Parrot Loopback ***\n");
+    ESP_LOGI("MAIN", "\n*** Rbot ready! Send 'TALK' / 'ECHO' via Serial or touch GPIO 14 for Voice Chat ***\n");
 
     int last_touch = 1;
     while(1) {
         int touch = gpio_get_level(PIN_TOUCH);
         if (touch == 0 && last_touch == 1) { // Pressed / touched
-            ESP_LOGI("MAIN", "Touch/Button on GPIO %d pressed! Starting Parrot Loopback (3s mic -> speaker)...", PIN_TOUCH);
-            selftest_mic_speaker_loopback(3);
+            ESP_LOGI("MAIN", "Touch/Button on GPIO %d pressed! Starting Voice Chat Turn (5s)...", PIN_TOUCH);
+            voice_chat_trigger_turn(5);
         }
         last_touch = touch;
+
+        if (g_net) board_network_tick(g_net);
 
         // Periodic eye blink animation & overlay update
         uint32_t now = xTaskGetTickCount();

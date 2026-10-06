@@ -171,12 +171,8 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
         wifi_set_status(net, WIFI_CONNECTING);
         net->wifi_last_retry_ms = esp_timer_get_time() / 1000;
-        if (wifi_scan_for_ssid()) {
-            esp_wifi_connect();
-        } else {
-            ESP_LOGW(TAG, "Network not found, delaying");
-            wifi_schedule_reconnect(net, 30000);
-        }
+        ESP_LOGI(TAG, "Wi-Fi STA started, connecting to SSID '%s'...", WIFI_SSID);
+        esp_wifi_connect();
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         ESP_LOGW(TAG, "Disconnected");
         net->wifi_connected_time = 0;
@@ -285,8 +281,7 @@ board_network_t* board_network_init(void)
     
     esp_wifi_set_mode(WIFI_MODE_STA);
     esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
-    // [1.1.36] Kill-Switch: Do NOT start WiFi yet.
-    // esp_wifi_start(); 
+    esp_wifi_start(); 
     
     return net;
 }
