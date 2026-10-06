@@ -947,6 +947,18 @@ static void cli_task(void *arg) {
                        (unsigned)esp_get_minimum_free_heap_size(),
                        (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
                 fflush(stdout);
+            } else if (strstr(line, "BAT") || strstr(line, "bat")) {
+                char *sp = strchr(line, ' ');
+                if (sp) {
+                    while (*sp == ' ') sp++;
+                    if (strstr(sp, "FULL") || strstr(sp, "full")) board_face_set_battery_state(BAT_FULL);
+                    else if (strstr(sp, "MED") || strstr(sp, "med") || strstr(sp, "2")) board_face_set_battery_state(BAT_MED);
+                    else if (strstr(sp, "LOW") || strstr(sp, "low") || strstr(sp, "1")) board_face_set_battery_state(BAT_LOW);
+                    else if (strstr(sp, "CRIT") || strstr(sp, "crit")) board_face_set_battery_state(BAT_CRIT);
+                    else if (strstr(sp, "CHG") || strstr(sp, "chg") || strstr(sp, "charge")) board_face_set_battery_state(BAT_CHARGING);
+                    printf("BAT_SET_OK\r\n");
+                    fflush(stdout);
+                }
             } else if (strstr(line, "FACE") || strstr(line, "face")) {
                 char *sp = strchr(line, ' ');
                 if (sp) {
@@ -956,7 +968,16 @@ static void cli_task(void *arg) {
                     else if (strstr(sp, "LISTEN") || strstr(sp, "listen")) board_face_set_state(FACE_LISTENING);
                     else if (strstr(sp, "THINK") || strstr(sp, "think")) board_face_set_state(FACE_THINKING);
                     else if (strstr(sp, "SPEAK") || strstr(sp, "speak")) board_face_set_state(FACE_SPEAKING);
+                    else if (strstr(sp, "HAPPY_BIG") || strstr(sp, "happy_big")) board_face_trigger_happy_big(2500);
                     else if (strstr(sp, "HAPPY") || strstr(sp, "happy")) board_face_trigger_happy(2500);
+                    else if (strstr(sp, "CURIOUS_L") || strstr(sp, "curious_l")) board_face_trigger_curious(true, 2500);
+                    else if (strstr(sp, "CURIOUS_R") || strstr(sp, "curious_r") || strstr(sp, "CURIOUS") || strstr(sp, "curious")) board_face_trigger_curious(false, 2500);
+                    else if (strstr(sp, "CONFUSED") || strstr(sp, "confused")) board_face_trigger_confused(2500);
+                    else if (strstr(sp, "EXCITED") || strstr(sp, "excited")) board_face_trigger_excited(2500);
+                    else if (strstr(sp, "SURPRISE") || strstr(sp, "surprise")) board_face_trigger_surprised(2500);
+                    else if (strstr(sp, "WINK_L") || strstr(sp, "wink_l")) board_face_trigger_wink(true, 1500);
+                    else if (strstr(sp, "WINK_R") || strstr(sp, "wink_r") || strstr(sp, "WINK") || strstr(sp, "wink")) board_face_trigger_wink(false, 1500);
+                    else if (strstr(sp, "SLEEP") || strstr(sp, "sleep")) board_face_trigger_sleepy();
                     else if (strstr(sp, "ERR") || strstr(sp, "err")) board_face_set_error(FACE_ERR_SERVER, "TEST ERR");
                     else if (strstr(sp, "OFFLINE") || strstr(sp, "offline") || strstr(sp, "DISC")) board_face_set_state(FACE_DISCONNECTED);
                     printf("FACE_SET_OK\r\n");

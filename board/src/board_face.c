@@ -22,24 +22,24 @@ static const char *TAG_FACE = "BD_FACE";
 #define SCREEN_W 128
 #define SCREEN_H 160
 
-// Colors in Big-Endian for direct ST7735 SPI DMA transfer
+// Colors in Big-Endian for ST7735 SPI DMA transfer
 #define RGB565_BE(r, g, b) (__builtin_bswap16(((uint16_t)((r) & 0xF8) << 8) | ((uint16_t)((g) & 0xFC) << 3) | ((uint16_t)(b) >> 3)))
 
-#define COL_BLACK       RGB565_BE(0,   0,   0)
-#define COL_CYAN        RGB565_BE(0,   229, 255)
-#define COL_CYAN_BRIGHT RGB565_BE(80,  255, 255)
-#define COL_CYAN_DIM    RGB565_BE(50,  120, 150)
-#define COL_THINKING    RGB565_BE(0,   215, 255)
-#define COL_SPEAKING    RGB565_BE(0,   240, 255)
-#define COL_HAPPY       RGB565_BE(0,   255, 180)
-#define COL_ERROR       RGB565_BE(255, 55,  55)
-#define COL_WHITE       RGB565_BE(255, 255, 255)
-#define COL_GRAY        RGB565_BE(90,  90,  90)
-#define COL_DARK_GRAY   RGB565_BE(35,  40,  50)
-#define COL_GREEN       RGB565_BE(0,   255, 70)
-#define COL_YELLOW      RGB565_BE(255, 220, 0)
-#define COL_ORANGE      RGB565_BE(255, 140, 0)
-#define COL_STATUS_BG   RGB565_BE(14,  18,  26)
+#define COL_BLACK        RGB565_BE(0,   0,   0)
+#define COL_CYAN         RGB565_BE(0,   229, 255) // Primary friendly electric cyan
+#define COL_CYAN_BRIGHT  RGB565_BE(90,  255, 255) // Listening / excited
+#define COL_CYAN_DIM     RGB565_BE(40,  110, 140) // Sleepy / offline
+#define COL_AMBER        RGB565_BE(255, 195, 40)  // Thinking
+#define COL_MINT         RGB565_BE(0,   255, 170) // Happy soft & big
+#define COL_WHITE        RGB565_BE(255, 255, 255) // Specular highlights
+#define COL_ICE_BLUE     RGB565_BE(200, 245, 255) // Surprised
+#define COL_ERROR        RGB565_BE(255, 60,  60)  // Coral red
+#define COL_ORANGE       RGB565_BE(255, 140, 20)
+#define COL_GREEN        RGB565_BE(0,   255, 70)  // Full battery / Wi-Fi
+#define COL_YELLOW       RGB565_BE(255, 220, 0)
+#define COL_GRAY         RGB565_BE(85,  85,  85)
+#define COL_DARK_GRAY    RGB565_BE(30,  35,  45)
+#define COL_STATUS_BG    RGB565_BE(10,  12,  18)
 
 // 40KB Framebuffer allocated in DMA-capable memory
 static uint16_t *s_framebuf = NULL;
@@ -56,29 +56,37 @@ static volatile wifi_status_t s_wifi_status = WIFI_CONNECTING;
 static volatile battery_state_t s_bat_state = BAT_FULL;
 static volatile float s_audio_level_in = 0.0f;
 
+// Poses: Current interpolated pose and Target desired pose
+static face_pose_t s_cur_pose;
+static face_pose_t s_tgt_pose;
+
 // Timers and transitions
 static int64_t s_state_start_ms = 0;
-static int64_t s_happy_until_ms = 0;
-static int64_t s_error_until_ms = 0;
+static int64_t s_timed_hold_until_ms = 0;
+static int64_t s_last_interaction_ms = 0;
+static bool s_is_sleepy = false;
 
-// Gaze and Eyelid Parameters
-static float s_openness = 0.0f;       // 0.0 = closed, 1.0 = fully open
-static float s_target_openness = 1.0f;
-static float s_gaze_x = 0.0f;         // -5.0 to +5.0
-static float s_gaze_y = 0.0f;         // -4.0 to +4.0
-static float s_target_gaze_x = 0.0f;
-static float s_target_gaze_y = 0.0f;
-
-static int64_t s_next_blink_ms = 0;
-static bool s_is_blinking = false;
+// Independent Eye Blinking State
+static bool s_blink_active = false;
 static int64_t s_blink_start_ms = 0;
-static int32_t s_blink_duration_ms = 180;
+static int32_t s_blink_dur_ms = 180;
+static int32_t s_blink_r_delay_ms = 18; // Organic asymmetry: Right eye lags left by ~18ms
 static bool s_double_blink_pending = false;
+static int64_t s_next_blink_ms = 0;
 
-static int64_t s_next_gaze_shift_ms = 0;
-static int64_t s_gaze_return_ms = 0;
+// Idle Saccades & Micro-Expressions
+static int64_t s_next_glance_ms = 0;
+static int64_t s_glance_return_ms = 0;
+static int64_t s_next_curious_ms = 0;
+static int64_t s_curious_return_ms = 0;
+static int64_t s_next_playful_ms = 0;
+static int64_t s_playful_return_ms = 0;
 
-// Demo Mode
+// Thinking Orbital Sub-poses
+static int s_thinking_subpose = 0;
+static int64_t s_next_thinking_sub_ms = 0;
+
+// Demo Mode (27 Steps)
 static volatile bool s_demo_active = false;
 static int s_demo_step = 0;
 static int64_t s_demo_step_until_ms = 0;
@@ -130,6 +138,9 @@ static const uint8_t s_font3x5[36][5] = {
     {0b111,0b101,0b111,0b001,0b111}, // 9
 };
 
+// -------------------------------------------------------------
+// Framebuffer Primitives
+// -------------------------------------------------------------
 static inline void fb_set_pixel(int x, int y, uint16_t col)
 {
     if (x >= 0 && x < SCREEN_W && y >= 0 && y < SCREEN_H) {
@@ -153,46 +164,33 @@ static void fb_fill_rect(int x, int y, int w, int h, uint16_t col)
     }
 }
 
-static void fb_draw_round_rect(int x, int y, int w, int h, int r, uint16_t col)
-{
-    if (w <= 0 || h <= 0) return;
-    if (r > w / 2) r = w / 2;
-    if (r > h / 2) r = h / 2;
-
-    for (int j = 0; j < h; j++) {
-        int dx = 0;
-        if (j < r) {
-            int dy = r - 1 - j;
-            dx = r - (int)roundf(sqrtf((float)(r * r - dy * dy)));
-        } else if (j >= h - r) {
-            int dy = j - (h - r);
-            dx = r - (int)roundf(sqrtf((float)(r * r - dy * dy)));
-        }
-
-        int start_x = x + dx;
-        int end_x = x + w - 1 - dx;
-        int py = y + j;
-
-        if (py < 0 || py >= SCREEN_H) continue;
-        if (start_x < 0) start_x = 0;
-        if (end_x >= SCREEN_W) end_x = SCREEN_W - 1;
-
-        if (end_x >= start_x) {
-            uint16_t *row = &s_framebuf[py * SCREEN_W];
-            for (int px = start_x; px <= end_x; px++) {
-                row[px] = col;
-            }
-        }
-    }
-}
-
-static void fb_draw_happy_arc(int cx, int cy, int ro, int thickness, uint16_t col)
+static void fb_draw_arc(int cx, int cy, int ro, int thickness, uint16_t col)
 {
     int ri = ro - thickness;
     int ro2 = ro * ro;
     int ri2 = ri * ri;
 
     for (int y = cy - ro; y <= cy; y++) {
+        if (y < 0 || y >= SCREEN_H) continue;
+        int dy = y - cy;
+        for (int x = cx - ro; x <= cx + ro; x++) {
+            if (x < 0 || x >= SCREEN_W) continue;
+            int dx = x - cx;
+            int dist2 = dx * dx + dy * dy;
+            if (dist2 <= ro2 && dist2 >= ri2) {
+                s_framebuf[y * SCREEN_W + x] = col;
+            }
+        }
+    }
+}
+
+static void fb_draw_sad_arc(int cx, int cy, int ro, int thickness, uint16_t col)
+{
+    int ri = ro - thickness;
+    int ro2 = ro * ro;
+    int ri2 = ri * ri;
+
+    for (int y = cy; y <= cy + ro; y++) {
         if (y < 0 || y >= SCREEN_H) continue;
         int dy = y - cy;
         for (int x = cx - ro; x <= cx + ro; x++) {
@@ -226,15 +224,18 @@ static void fb_draw_char(int x, int y, char ch, uint16_t col, int scale)
     } else if (ch == '-') {
         fb_fill_rect(x, y + 2 * scale, 3 * scale, scale, col);
         return;
-    } else if (ch == '(') {
-        fb_fill_rect(x + scale, y, scale, scale, col);
-        fb_fill_rect(x, y + scale, scale, 3 * scale, col);
+    } else if (ch == '?') {
+        fb_fill_rect(x, y, 3 * scale, scale, col);
+        fb_fill_rect(x + 2 * scale, y + scale, scale, scale, col);
+        fb_fill_rect(x + scale, y + 2 * scale, scale, scale, col);
         fb_fill_rect(x + scale, y + 4 * scale, scale, scale, col);
         return;
-    } else if (ch == ')') {
-        fb_fill_rect(x, y, scale, scale, col);
-        fb_fill_rect(x + scale, y + scale, scale, 3 * scale, col);
-        fb_fill_rect(x, y + 4 * scale, scale, scale, col);
+    } else if (ch == '(' || ch == ')') {
+        fb_fill_rect(x + scale, y, scale, 5 * scale, col);
+        return;
+    } else if (ch == ';') {
+        fb_fill_rect(x + scale, y + 1 * scale, scale, scale, col);
+        fb_fill_rect(x + scale, y + 3 * scale, scale, 2 * scale, col);
         return;
     }
 
@@ -287,9 +288,130 @@ static void fb_draw_text_centered(int y, const char *txt, uint16_t col, int scal
 }
 
 // -------------------------------------------------------------
-// Top Header Rendering: Clean Wi-Fi & Battery Indicators
+// Eye Rasterization: 5 Shape Families & Dynamic Parameters
 // -------------------------------------------------------------
-static void render_header(void)
+static void fb_render_eye(const eye_params_t *eye, float blink_factor)
+{
+    // 1. Calculate effective geometry
+    float eff_open = eye->openness * blink_factor;
+    int eff_h = (int)roundf(eye->height * eye->stretch * eff_open);
+    if (eff_h < 3) eff_h = 3; // Sleek closed eyelid slit minimum
+
+    int eff_w = (int)roundf(eye->width * eye->squash);
+    if (eff_w < 6) eff_w = 6;
+
+    int cx = (int)roundf(eye->center_x + eye->gaze_x);
+    int cy = (int)roundf(eye->center_y + eye->gaze_y);
+
+    int x_left = cx - eff_w / 2;
+    int y_top = cy - eff_h / 2;
+
+    // 2. Family A: ARC (Happy smiling crescent)
+    if (eye->shape == EYE_SHAPE_ARC) {
+        int arc_ro = eff_w / 2;
+        int arc_thick = 5;
+        if (arc_thick > arc_ro / 2) arc_thick = arc_ro / 2;
+        fb_draw_arc(cx, cy + 4, arc_ro, arc_thick, eye->color);
+        return;
+    }
+
+    // 3. Family B: OVAL (Ellipse)
+    if (eye->shape == EYE_SHAPE_OVAL) {
+        int rx = eff_w / 2;
+        int ry = eff_h / 2;
+        if (rx <= 0 || ry <= 0) return;
+
+        for (int y = cy - ry; y <= cy + ry; y++) {
+            if (y < 0 || y >= SCREEN_H) continue;
+            int dy = y - cy;
+            float ratio = (float)(dy * dy) / (float)(ry * ry);
+            if (ratio > 1.0f) continue;
+            int dx = (int)roundf((float)rx * sqrtf(1.0f - ratio));
+
+            int start_x = cx - dx;
+            int end_x = cx + dx;
+            if (start_x < 0) start_x = 0;
+            if (end_x >= SCREEN_W) end_x = SCREEN_W - 1;
+
+            if (end_x >= start_x) {
+                uint16_t *row = &s_framebuf[y * SCREEN_W];
+                for (int px = start_x; px <= end_x; px++) {
+                    row[px] = eye->color;
+                }
+            }
+        }
+    } else {
+        // 4. Family C, D, E: ROUNDED, SQUINT, HALF-LID
+        int r = (int)roundf(eye->corner_radius);
+        if (eye->shape == EYE_SHAPE_SQUINT) {
+            r = eff_h / 2;
+        }
+        if (r > eff_w / 2) r = eff_w / 2;
+        if (r > eff_h / 2) r = eff_h / 2;
+
+        int cut_top_px = (int)roundf((float)eff_h * eye->top_lid);
+        int cut_bot_px = (int)roundf((float)eff_h * eye->bottom_lid);
+        float tilt_tan = tanf(eye->tilt_deg * 3.14159f / 180.0f);
+
+        for (int j = 0; j < eff_h; j++) {
+            if (j < cut_top_px) continue;
+            if (j >= eff_h - cut_bot_px) continue;
+
+            int dx = 0;
+            if (j < r) {
+                int dy = r - 1 - j;
+                dx = r - (int)roundf(sqrtf((float)(r * r - dy * dy)));
+            } else if (j >= eff_h - r) {
+                int dy = j - (eff_h - r);
+                dx = r - (int)roundf(sqrtf((float)(r * r - dy * dy)));
+            }
+
+            int py = y_top + j;
+            if (py < 0 || py >= SCREEN_H) continue;
+
+            int start_x = x_left + dx;
+            int end_x = x_left + eff_w - 1 - dx;
+
+            // Apply tilt slant to top lid boundary
+            if (eye->tilt_deg != 0.0f && j < eff_h / 2) {
+                int slant_dy = (int)roundf((float)(dx - eff_w / 4) * tilt_tan);
+                if (j < cut_top_px + slant_dy) continue;
+            }
+
+            if (start_x < 0) start_x = 0;
+            if (end_x >= SCREEN_W) end_x = SCREEN_W - 1;
+
+            if (end_x >= start_x) {
+                uint16_t *row = &s_framebuf[py * SCREEN_W];
+                for (int px = start_x; px <= end_x; px++) {
+                    row[px] = eye->color;
+                }
+            }
+        }
+    }
+
+    // 5. Specular Highlights / Gleam (Organic Liveliness)
+    if (eye->highlight_int > 0.15f && eff_open > 0.40f && eye->shape != EYE_SHAPE_ARC) {
+        int gx = cx + eff_w / 4 + (int)(eye->gaze_x * 0.3f);
+        int gy = cy - eff_h / 4 + (int)(eye->gaze_y * 0.3f);
+        int gleam_size = (eff_w > 30) ? 4 : 3;
+
+        // Primary glossy specular shine
+        fb_fill_rect(gx - gleam_size / 2, gy - gleam_size / 2, gleam_size, gleam_size, COL_WHITE);
+
+        // Secondary subtle specular mini-gleam
+        if (eff_h > 36) {
+            int gx2 = cx - eff_w / 4;
+            int gy2 = cy + eff_h / 6;
+            fb_fill_rect(gx2, gy2, 2, 2, COL_WHITE);
+        }
+    }
+}
+
+// -------------------------------------------------------------
+// Top Header: Minimal Wi-Fi & Multi-State Battery
+// -------------------------------------------------------------
+static void render_header(int64_t now_ms)
 {
     // 1. Wi-Fi Indicator at (X=4, Y=3)
     const int wx = 4;
@@ -300,8 +422,6 @@ static void render_header(void)
     if (s_wifi_status == WIFI_CONNECTED || s_wifi_status == WIFI_CONNECTED_STABLE) {
         wcol = COL_GREEN;
     } else if (s_wifi_status == WIFI_CONNECTING) {
-        // Blink yellow
-        int64_t now_ms = esp_timer_get_time() / 1000;
         wcol = ((now_ms / 300) % 2 == 0) ? COL_YELLOW : COL_DARK_GRAY;
     } else {
         wcol = COL_ERROR;
@@ -314,350 +434,717 @@ static void render_header(void)
     fb_fill_rect(wx + 8, wy + 2, 3, 9, (s_wifi_status != WIFI_CONNECTED && s_wifi_status != WIFI_CONNECTED_STABLE) ? COL_DARK_GRAY : wcol);
 
     if (draw_strike) {
-        // Red diagonal strike line
         for (int i = 0; i < 11; i++) {
             fb_set_pixel(wx + i, wy + i, COL_ERROR);
         }
     }
 
-    // 2. Battery Indicator at (X=104, Y=4)
+    // 2. Battery Indicator at (X=104, Y=3)
     const int bx = 104;
-    const int by = 4;
+    const int by = 3;
     uint16_t bcol = COL_GREEN;
     int bars = 3;
 
-    if (s_bat_state == BAT_MED) {
-        bars = 2;
+    if (s_bat_state == BAT_CHARGING) {
+        // Charging Animation: cycle 1 -> 2 -> 3 bars smoothly
+        int step = (int)((now_ms / 280) % 4);
+        bars = (step == 0) ? 1 : (step == 1 ? 2 : 3);
         bcol = COL_GREEN;
+    } else if (s_bat_state == BAT_FULL) {
+        bars = 3;
+        bcol = COL_GREEN; // Full battery: Green
+    } else if (s_bat_state == BAT_MED) {
+        // 2 bars: Red as explicitly requested ("tinggal 2 bar berarti warna merah")
+        bars = 2;
+        bcol = COL_ERROR;
     } else if (s_bat_state == BAT_LOW) {
         bars = 1;
-        bcol = COL_ORANGE;
+        bcol = COL_ERROR; // <30% 1 bar: Red
     } else if (s_bat_state == BAT_CRIT) {
         bars = 1;
-        int64_t now_ms = esp_timer_get_time() / 1000;
-        bcol = ((now_ms / 250) % 2 == 0) ? COL_ERROR : COL_DARK_GRAY;
+        bcol = ((now_ms / 220) % 2 == 0) ? COL_ERROR : COL_DARK_GRAY; // Critical: Blinking Red
     }
 
-    // Battery Body Outline (18x9)
+    // Battery Shell Outline (17x9)
     fb_fill_rect(bx, by, 17, 1, COL_GRAY);
     fb_fill_rect(bx, by + 8, 17, 1, COL_GRAY);
     fb_fill_rect(bx, by, 1, 9, COL_GRAY);
     fb_fill_rect(bx + 16, by, 1, 9, COL_GRAY);
-    // Nipple
-    fb_fill_rect(bx + 17, by + 2, 2, 5, COL_GRAY);
+    // Battery Nipple
+    fb_fill_rect(bx + 17, by + 2, 2, 5, (s_bat_state == BAT_CHARGING) ? COL_YELLOW : COL_GRAY);
 
-    // Inner battery bars
+    // Inner battery bars (3 slots, each 4x5 px)
     for (int i = 0; i < bars; i++) {
         fb_fill_rect(bx + 2 + i * 5, by + 2, 4, 5, bcol);
     }
+
+    // Charging indicator symbol (lightning spark icon)
+    if (s_bat_state == BAT_CHARGING) {
+        fb_set_pixel(bx + 7, by + 3, COL_YELLOW);
+        fb_set_pixel(bx + 8, by + 3, COL_YELLOW);
+        fb_set_pixel(bx + 8, by + 4, COL_YELLOW);
+        fb_set_pixel(bx + 9, by + 4, COL_YELLOW);
+        fb_set_pixel(bx + 9, by + 5, COL_YELLOW);
+    }
 }
 
 // -------------------------------------------------------------
-// Procedural Face Rendering
+// Mouth & Audio Modulation Rendering
 // -------------------------------------------------------------
-static void render_face(int64_t now_ms)
+static void render_mouth(int64_t now_ms)
 {
-    // Screen center of eyes: Left=(38, 66), Right=(90, 66)
-    const int eye_left_cx = 38;
-    const int eye_right_cx = 90;
-    const int eye_cy = 66;
-
-    const int eye_w = (s_current_state == FACE_LISTENING) ? 30 : 28;
-    const int eye_base_h = (s_current_state == FACE_LISTENING) ? 42 : 38;
-
-    uint16_t eye_col = COL_CYAN;
-    switch (s_current_state) {
-        case FACE_LISTENING:   eye_col = COL_CYAN_BRIGHT; break;
-        case FACE_THINKING:    eye_col = COL_THINKING;    break;
-        case FACE_SPEAKING:    eye_col = COL_SPEAKING;    break;
-        case FACE_HAPPY:       eye_col = COL_HAPPY;       break;
-        case FACE_ERROR:       eye_col = COL_ERROR;       break;
-        case FACE_DISCONNECTED:eye_col = COL_CYAN_DIM;    break;
-        default:               eye_col = COL_CYAN;        break;
-    }
-
-    // Happy Expression: Crescent Smiling Eyes
-    if (s_current_state == FACE_HAPPY) {
-        int arc_ro = 15;
-        int arc_thick = 6;
-        fb_draw_happy_arc(eye_left_cx + (int)s_gaze_x, eye_cy + 4, arc_ro, arc_thick, eye_col);
-        fb_draw_happy_arc(eye_right_cx + (int)s_gaze_x, eye_cy + 4, arc_ro, arc_thick, eye_col);
-
-        // Small sweet smile mouth curve below eyes (Y=108)
-        fb_draw_happy_arc(SCREEN_W / 2, 116, 12, 4, eye_col);
+    if (s_cur_pose.mouth_policy == MOUTH_POLICY_NONE) {
         return;
     }
 
-    // Normal & Other Expressions: Rounded Rectangles with Eyelid Openness
-    int curr_h = (int)roundf((float)eye_base_h * s_openness);
-    if (curr_h < 4) curr_h = 4; // Min slit height for closed eyelid
+    const int mx = SCREEN_W / 2;
+    const int my = 116;
 
-    int corner_r = 8;
-    if (corner_r > curr_h / 2) corner_r = curr_h / 2;
-
-    int left_x = (eye_left_cx - eye_w / 2) + (int)s_gaze_x;
-    int right_x = (eye_right_cx - eye_w / 2) + (int)s_gaze_x;
-    int eye_y = (eye_cy - curr_h / 2) + (int)s_gaze_y;
-
-    // Draw Left & Right Eyes
-    fb_draw_round_rect(left_x, eye_y, eye_w, curr_h, corner_r, eye_col);
-    fb_draw_round_rect(right_x, eye_y, eye_w, curr_h, corner_r, eye_col);
-
-    // Slanted eyebrows for ERROR
-    if (s_current_state == FACE_ERROR && s_openness > 0.4f) {
-        // Cut top slant across inner brows: left eye angles down-right, right eye angles down-left
-        for (int i = 0; i < 12; i++) {
-            fb_fill_rect(left_x + eye_w - 1 - i, eye_y, 1, 1 + (i / 2), COL_BLACK);
-            fb_fill_rect(right_x + i, eye_y, 1, 1 + (i / 2), COL_BLACK);
-        }
-    }
-
-    // Glossy Specular Gleam / Highlight (adds life when eye is open)
-    if (s_openness > 0.6f && s_current_state != FACE_ERROR) {
-        int gleam_size = 4;
-        int gleam_ly = eye_y + 4;
-        int gleam_lx = left_x + eye_w - 7;
-        int gleam_rx = right_x + eye_w - 7;
-        fb_draw_round_rect(gleam_lx, gleam_ly, gleam_size, gleam_size, 1, COL_WHITE);
-        fb_draw_round_rect(gleam_rx, gleam_ly, gleam_size, gleam_size, 1, COL_WHITE);
-    }
-
-    // Speaking Expression: Dynamic Animated Soundwave Mouth
-    if (s_current_state == FACE_SPEAKING) {
+    if (s_cur_pose.mouth_policy == MOUTH_POLICY_SPEAKING) {
         float lev = s_audio_level_in;
-        // Fallback procedural modulation if live audio level is quiet
+        // Non-blocking time-based fallback if audio level is quiet/zero
         float time_sec = (float)now_ms / 1000.0f;
-        float synth = 0.35f + 0.35f * fabsf(sinf(time_sec * 12.0f));
-        if (lev < 0.1f) lev = synth;
+        float synth = 0.28f + 0.35f * fabsf(sinf(time_sec * 11.0f));
+        if (lev < 0.08f) lev = synth;
 
-        const int bar_cx = SCREEN_W / 2;
-        const int bar_y_center = 114;
+        const int num_bars = 5;
         const int bar_w = 4;
         const int bar_gap = 4;
-        const int num_bars = 5;
-        const float weights[5] = {0.5f, 0.85f, 1.0f, 0.85f, 0.5f};
+        const float weights[5] = {0.55f, 0.90f, 1.0f, 0.90f, 0.55f};
 
         int total_w = num_bars * bar_w + (num_bars - 1) * bar_gap;
-        int start_x = bar_cx - total_w / 2;
+        int start_x = mx - total_w / 2;
 
         for (int i = 0; i < num_bars; i++) {
-            int bh = 3 + (int)roundf(lev * weights[i] * 16.0f);
-            if (bh > 20) bh = 20;
+            int bh = 3 + (int)roundf(lev * weights[i] * 18.0f);
+            if (bh > 22) bh = 22;
             int bx = start_x + i * (bar_w + bar_gap);
-            int by = bar_y_center - bh / 2;
-            int br = 2;
-            if (br > bh / 2) br = bh / 2;
-            fb_draw_round_rect(bx, by, bar_w, bh, br, COL_SPEAKING);
+            int by = my - bh / 2;
+            int r = (bh >= 6) ? 2 : 1;
+            fb_fill_rect(bx, by, bar_w, bh, COL_CYAN_BRIGHT);
+            if (r > 0) {
+                fb_set_pixel(bx, by, COL_BLACK);
+                fb_set_pixel(bx + bar_w - 1, by, COL_BLACK);
+                fb_set_pixel(bx, by + bh - 1, COL_BLACK);
+                fb_set_pixel(bx + bar_w - 1, by + bh - 1, COL_BLACK);
+            }
         }
-    }
-
-    // Thinking Expression: Rotating Orbital Dots
-    if (s_current_state == FACE_THINKING) {
-        float t = (float)now_ms / 1000.0f;
-        const int dot_y = 114;
-        const int dot_cx = SCREEN_W / 2;
-        for (int i = 0; i < 3; i++) {
-            float phase = t * 6.0f - (float)i * 1.0f;
-            float r_scale = 1.0f + 1.2f * (0.5f + 0.5f * sinf(phase));
-            int dot_r = (int)roundf(r_scale);
-            int dx = (i - 1) * 12;
-            fb_draw_round_rect(dot_cx + dx - dot_r, dot_y - dot_r, dot_r * 2, dot_r * 2, dot_r, COL_THINKING);
-        }
+    } else if (s_cur_pose.mouth_policy == MOUTH_POLICY_SMILE) {
+        fb_draw_arc(mx, my, 10, 3, COL_MINT);
+    } else if (s_cur_pose.mouth_policy == MOUTH_POLICY_SAD) {
+        fb_draw_sad_arc(mx, my - 4, 10, 3, COL_ERROR);
+    } else if (s_cur_pose.mouth_policy == MOUTH_POLICY_SURPRISE) {
+        fb_fill_rect(mx - 3, my - 5, 6, 10, COL_ICE_BLUE);
+        fb_fill_rect(mx - 1, my - 3, 2, 6, COL_BLACK);
     }
 }
 
 // -------------------------------------------------------------
-// Bottom Status Banner Rendering
+// Thinking Orbital Particles
+// -------------------------------------------------------------
+static void render_thinking_orbit(int64_t now_ms)
+{
+    if (s_current_state != FACE_THINKING) return;
+
+    float t = (float)now_ms / 1000.0f;
+    const int dot_y = 116;
+    const int dot_cx = SCREEN_W / 2;
+
+    for (int i = 0; i < 3; i++) {
+        float phase = t * 6.5f - (float)i * 1.1f;
+        float r_scale = 1.0f + 1.3f * (0.5f + 0.5f * sinf(phase));
+        int dot_r = (int)roundf(r_scale);
+        int dx = (i - 1) * 14;
+        fb_fill_rect(dot_cx + dx - dot_r, dot_y - dot_r, dot_r * 2, dot_r * 2, COL_AMBER);
+    }
+}
+
+// -------------------------------------------------------------
+// Bottom Minimal Status Banner
 // -------------------------------------------------------------
 static void render_status_banner(void)
 {
-    const int by = 142;
-    const int bh = 17;
+    const int by = 146;
+    const int bh = 14;
 
-    // Subtle dark banner container
     fb_fill_rect(0, by, SCREEN_W, bh, COL_STATUS_BG);
     fb_fill_rect(0, by, SCREEN_W, 1, COL_DARK_GRAY);
 
-    const char *label = "RBOT READY";
+    const char *label = "READY";
     uint16_t txt_col = COL_WHITE;
-    int scale = 2;
+    int scale = 1;
 
-    if (s_custom_status[0] != '\0') {
+    if (s_demo_active && s_tgt_pose.status_label[0] != '\0') {
+        label = s_tgt_pose.status_label;
+        txt_col = COL_CYAN_BRIGHT;
+    } else if (s_custom_status[0] != '\0') {
         label = s_custom_status;
-        scale = (strlen(label) > 10) ? 1 : 2;
+        txt_col = COL_WHITE;
     } else {
         switch (s_current_state) {
-            case FACE_BOOT:
-                label = "REGGI BOT";
-                txt_col = COL_CYAN;
-                scale = 2;
-                break;
-            case FACE_IDLE:
-                label = "READY";
-                txt_col = COL_WHITE;
-                scale = 2;
-                break;
-            case FACE_LISTENING:
-                label = "LISTENING";
-                txt_col = COL_CYAN_BRIGHT;
-                scale = 1;
-                break;
-            case FACE_THINKING:
-                label = "THINKING";
-                txt_col = COL_THINKING;
-                scale = 1;
-                break;
-            case FACE_SPEAKING:
-                label = "SPEAKING";
-                txt_col = COL_SPEAKING;
-                scale = 1;
-                break;
-            case FACE_HAPPY:
-                label = "HAPPY :)";
-                txt_col = COL_HAPPY;
-                scale = 2;
-                break;
-            case FACE_ERROR:
-                if (s_error_msg[0] != '\0') {
-                    label = s_error_msg;
-                } else {
-                    label = "ERROR";
-                }
-                txt_col = COL_ERROR;
-                scale = 1;
-                break;
-            case FACE_DISCONNECTED:
-                label = "OFFLINE";
-                txt_col = COL_ORANGE;
-                scale = 2;
-                break;
+            case FACE_BOOT:         label = "REGGI BOT"; txt_col = COL_CYAN; break;
+            case FACE_IDLE:         label = s_is_sleepy ? "SLEEPY..." : "READY"; txt_col = COL_WHITE; break;
+            case FACE_LISTENING:    label = "LISTENING"; txt_col = COL_CYAN_BRIGHT; break;
+            case FACE_THINKING:     label = "THINKING"; txt_col = COL_AMBER; break;
+            case FACE_SPEAKING:     label = "SPEAKING"; txt_col = COL_CYAN_BRIGHT; break;
+            case FACE_HAPPY:        label = "HAPPY :)"; txt_col = COL_MINT; break;
+            case FACE_ERROR:        label = (s_error_msg[0] != '\0') ? s_error_msg : "ERROR"; txt_col = COL_ERROR; break;
+            case FACE_DISCONNECTED: label = "OFFLINE"; txt_col = COL_ORANGE; break;
         }
     }
 
-    int text_y = by + (bh - (5 * scale)) / 2;
+    int text_y = by + (bh - 5 * scale) / 2;
     fb_draw_text_centered(text_y, label, txt_col, scale);
 }
 
 // -------------------------------------------------------------
-// Animation Update Physics (Runs every frame)
+// Pose Presets & Initialization
 // -------------------------------------------------------------
-static void update_animation_physics(int64_t now_ms)
+static void pose_init_neutral_friendly(face_pose_t *p)
+{
+    memset(p, 0, sizeof(face_pose_t));
+
+    // Left Eye: Baseline friendly rounded rectangle
+    p->left_eye.center_x = 38.0f;
+    p->left_eye.center_y = 68.0f;
+    p->left_eye.width = 33.0f;
+    p->left_eye.height = 48.0f;
+    p->left_eye.corner_radius = 11.0f;
+    p->left_eye.openness = 1.0f;
+    p->left_eye.squash = 1.0f;
+    p->left_eye.stretch = 1.0f;
+    p->left_eye.highlight_int = 1.0f;
+    p->left_eye.color = COL_CYAN;
+    p->left_eye.shape = EYE_SHAPE_ROUNDED;
+
+    // Right Eye: Subtle controlled organic asymmetry (+3% height)
+    p->right_eye.center_x = 90.0f;
+    p->right_eye.center_y = 68.0f;
+    p->right_eye.width = 34.0f;
+    p->right_eye.height = 49.5f;
+    p->right_eye.corner_radius = 11.0f;
+    p->right_eye.openness = 1.0f;
+    p->right_eye.squash = 1.0f;
+    p->right_eye.stretch = 1.0f;
+    p->right_eye.highlight_int = 1.0f;
+    p->right_eye.color = COL_CYAN;
+    p->right_eye.shape = EYE_SHAPE_ROUNDED;
+
+    p->blink_policy = BLINK_POLICY_NORMAL;
+    p->mouth_policy = MOUTH_POLICY_NONE;
+    strncpy(p->status_label, "READY", sizeof(p->status_label) - 1);
+}
+
+static void pose_init_curious(face_pose_t *p, bool left_larger)
+{
+    pose_init_neutral_friendly(p);
+
+    if (left_larger) {
+        // Left eye enlarged +24%, raised 3px
+        p->left_eye.width = 39.0f;
+        p->left_eye.height = 57.0f;
+        p->left_eye.center_y = 65.0f;
+        p->left_eye.tilt_deg = +4.0f; // Expressive quizzical brow tilt
+        p->left_eye.color = COL_CYAN_BRIGHT;
+
+        // Right eye slightly smaller -12%
+        p->right_eye.width = 29.0f;
+        p->right_eye.height = 43.0f;
+        p->right_eye.center_y = 70.0f;
+        p->right_eye.tilt_deg = -2.0f;
+
+        p->global_gaze_x = -4.0f; // Looks towards the enlarged eye
+    } else {
+        // Right eye enlarged +24%, raised 3px
+        p->left_eye.width = 29.0f;
+        p->left_eye.height = 43.0f;
+        p->left_eye.center_y = 70.0f;
+        p->left_eye.tilt_deg = +2.0f;
+
+        p->right_eye.width = 39.0f;
+        p->right_eye.height = 57.0f;
+        p->right_eye.center_y = 65.0f;
+        p->right_eye.tilt_deg = -4.0f;
+        p->right_eye.color = COL_CYAN_BRIGHT;
+
+        p->global_gaze_x = 4.0f;
+    }
+
+    p->blink_policy = BLINK_POLICY_CURIOUS;
+    strncpy(p->status_label, "CURIOUS", sizeof(p->status_label) - 1);
+}
+
+static void pose_init_attentive_listening(face_pose_t *p)
+{
+    pose_init_neutral_friendly(p);
+
+    // Both eyes taller & wider, electric cyan
+    p->left_eye.width = 36.0f;
+    p->left_eye.height = 54.0f;
+    p->left_eye.corner_radius = 12.0f;
+    p->left_eye.color = COL_CYAN_BRIGHT;
+
+    p->right_eye.width = 36.5f;
+    p->right_eye.height = 54.5f;
+    p->right_eye.corner_radius = 12.0f;
+    p->right_eye.color = COL_CYAN_BRIGHT;
+
+    strncpy(p->status_label, "LISTENING", sizeof(p->status_label) - 1);
+}
+
+static void pose_init_thinking(face_pose_t *p, int subpose)
+{
+    pose_init_neutral_friendly(p);
+
+    p->left_eye.color = COL_AMBER;
+    p->right_eye.color = COL_AMBER;
+
+    if (subpose == 0) {
+        // Look up-left
+        p->left_eye.width = 29.0f;
+        p->left_eye.height = 44.0f;
+        p->left_eye.top_lid = 0.22f;
+        p->left_eye.gaze_x = -4.0f;
+        p->left_eye.gaze_y = -3.5f;
+
+        p->right_eye.width = 35.0f;
+        p->right_eye.height = 49.0f;
+        p->right_eye.top_lid = 0.15f;
+        p->right_eye.gaze_x = -4.0f;
+        p->right_eye.gaze_y = -3.5f;
+    } else if (subpose == 1) {
+        // Look up-right
+        p->left_eye.width = 35.0f;
+        p->left_eye.height = 49.0f;
+        p->left_eye.top_lid = 0.15f;
+        p->left_eye.gaze_x = 4.0f;
+        p->left_eye.gaze_y = -3.5f;
+
+        p->right_eye.width = 29.0f;
+        p->right_eye.height = 44.0f;
+        p->right_eye.top_lid = 0.22f;
+        p->right_eye.gaze_x = 4.0f;
+        p->right_eye.gaze_y = -3.5f;
+    } else {
+        // Micro-squint thinking pause
+        p->left_eye.top_lid = 0.35f;
+        p->right_eye.top_lid = 0.35f;
+        p->left_eye.gaze_x = -2.0f;
+        p->right_eye.gaze_x = -2.0f;
+    }
+
+    strncpy(p->status_label, "THINKING", sizeof(p->status_label) - 1);
+}
+
+static void pose_init_speaking(face_pose_t *p)
+{
+    pose_init_neutral_friendly(p);
+
+    // Warm, friendly soft squint while speaking
+    p->left_eye.height = 44.0f;
+    p->left_eye.top_lid = 0.12f;
+    p->left_eye.color = COL_CYAN_BRIGHT;
+
+    p->right_eye.height = 44.5f;
+    p->right_eye.top_lid = 0.12f;
+    p->right_eye.color = COL_CYAN_BRIGHT;
+
+    p->mouth_policy = MOUTH_POLICY_SPEAKING;
+    strncpy(p->status_label, "SPEAKING", sizeof(p->status_label) - 1);
+}
+
+static void pose_init_happy_soft(face_pose_t *p)
+{
+    pose_init_neutral_friendly(p);
+
+    // Soft happy squint
+    p->left_eye.shape = EYE_SHAPE_SQUINT;
+    p->left_eye.height = 20.0f;
+    p->left_eye.width = 34.0f;
+    p->left_eye.tilt_deg = +5.0f;
+    p->left_eye.color = COL_MINT;
+
+    p->right_eye.shape = EYE_SHAPE_SQUINT;
+    p->right_eye.height = 20.0f;
+    p->right_eye.width = 34.0f;
+    p->right_eye.tilt_deg = -5.0f;
+    p->right_eye.color = COL_MINT;
+
+    p->blink_policy = BLINK_POLICY_NONE;
+    p->mouth_policy = MOUTH_POLICY_SMILE;
+    strncpy(p->status_label, "HAPPY :)", sizeof(p->status_label) - 1);
+}
+
+static void pose_init_happy_big(face_pose_t *p)
+{
+    pose_init_neutral_friendly(p);
+
+    // Crescent smiling arcs (^ ^)
+    p->left_eye.shape = EYE_SHAPE_ARC;
+    p->left_eye.width = 34.0f;
+    p->left_eye.height = 34.0f;
+    p->left_eye.center_y = 66.0f;
+    p->left_eye.color = COL_MINT;
+
+    p->right_eye.shape = EYE_SHAPE_ARC;
+    p->right_eye.width = 34.0f;
+    p->right_eye.height = 34.0f;
+    p->right_eye.center_y = 66.0f;
+    p->right_eye.color = COL_MINT;
+
+    p->blink_policy = BLINK_POLICY_NONE;
+    p->mouth_policy = MOUTH_POLICY_SMILE;
+    strncpy(p->status_label, "HAPPY :D", sizeof(p->status_label) - 1);
+}
+
+static void pose_init_excited(face_pose_t *p)
+{
+    pose_init_neutral_friendly(p);
+
+    p->left_eye.width = 38.0f;
+    p->left_eye.height = 56.0f;
+    p->left_eye.center_y = 66.0f;
+    p->left_eye.squash = 1.05f;
+    p->left_eye.color = COL_CYAN_BRIGHT;
+
+    p->right_eye.width = 38.0f;
+    p->right_eye.height = 56.0f;
+    p->right_eye.center_y = 67.5f;
+    p->right_eye.squash = 1.05f;
+    p->right_eye.color = COL_CYAN_BRIGHT;
+
+    p->mouth_policy = MOUTH_POLICY_SMILE;
+    strncpy(p->status_label, "EXCITED!", sizeof(p->status_label) - 1);
+}
+
+static void pose_init_surprised(face_pose_t *p)
+{
+    pose_init_neutral_friendly(p);
+
+    // Tall smooth ovals
+    p->left_eye.shape = EYE_SHAPE_OVAL;
+    p->left_eye.width = 32.0f;
+    p->left_eye.height = 58.0f;
+    p->left_eye.color = COL_ICE_BLUE;
+
+    p->right_eye.shape = EYE_SHAPE_OVAL;
+    p->right_eye.width = 32.0f;
+    p->right_eye.height = 58.0f;
+    p->right_eye.color = COL_ICE_BLUE;
+
+    p->mouth_policy = MOUTH_POLICY_SURPRISE;
+    strncpy(p->status_label, "WHOA!", sizeof(p->status_label) - 1);
+}
+
+static void pose_init_playful_squint(face_pose_t *p)
+{
+    pose_init_neutral_friendly(p);
+
+    // One eye squints playfully, other stays open with soft gaze
+    p->left_eye.shape = EYE_SHAPE_SQUINT;
+    p->left_eye.height = 14.0f;
+    p->left_eye.width = 32.0f;
+    p->left_eye.tilt_deg = +4.0f;
+
+    p->right_eye.width = 34.0f;
+    p->right_eye.height = 49.0f;
+    p->right_eye.tilt_deg = -2.0f;
+    p->right_eye.gaze_x = 3.0f;
+
+    p->mouth_policy = MOUTH_POLICY_SMILE;
+    strncpy(p->status_label, "HEHE ;)", sizeof(p->status_label) - 1);
+}
+
+static void pose_init_wink(face_pose_t *p, bool left_eye)
+{
+    pose_init_neutral_friendly(p);
+
+    if (left_eye) {
+        p->left_eye.openness = 0.08f; // Closed wink slit
+        p->left_eye.tilt_deg = +5.0f;
+
+        p->right_eye.openness = 1.0f;
+        p->right_eye.width = 35.0f;
+        p->right_eye.height = 51.0f;
+        p->right_eye.gaze_x = -2.0f;
+    } else {
+        p->left_eye.openness = 1.0f;
+        p->left_eye.width = 35.0f;
+        p->left_eye.height = 51.0f;
+        p->left_eye.gaze_x = 2.0f;
+
+        p->right_eye.openness = 0.08f;
+        p->right_eye.tilt_deg = -5.0f;
+    }
+
+    p->mouth_policy = MOUTH_POLICY_SMILE;
+    strncpy(p->status_label, "WINK ;)", sizeof(p->status_label) - 1);
+}
+
+static void pose_init_confused(face_pose_t *p)
+{
+    pose_init_neutral_friendly(p);
+
+    // Asymmetric quizzical expression: Left lowered & half-lid, Right attentive
+    p->left_eye.shape = EYE_SHAPE_HALF_LID;
+    p->left_eye.width = 30.0f;
+    p->left_eye.height = 42.0f;
+    p->left_eye.center_y = 72.0f; // Lowered 4px
+    p->left_eye.top_lid = 0.45f;
+    p->left_eye.tilt_deg = -5.0f;
+
+    p->right_eye.width = 36.0f;
+    p->right_eye.height = 52.0f;
+    p->right_eye.center_y = 66.0f; // Raised 2px
+    p->right_eye.tilt_deg = +4.0f;
+
+    p->global_gaze_x = -3.0f;
+    strncpy(p->status_label, "HMM?", sizeof(p->status_label) - 1);
+}
+
+static void pose_init_sleepy(face_pose_t *p)
+{
+    pose_init_neutral_friendly(p);
+
+    p->left_eye.shape = EYE_SHAPE_HALF_LID;
+    p->left_eye.height = 26.0f;
+    p->left_eye.top_lid = 0.60f;
+    p->left_eye.gaze_y = 3.0f; // Gaze down
+    p->left_eye.color = COL_CYAN_DIM;
+
+    p->right_eye.shape = EYE_SHAPE_HALF_LID;
+    p->right_eye.height = 26.0f;
+    p->right_eye.top_lid = 0.60f;
+    p->right_eye.gaze_y = 3.0f;
+    p->right_eye.color = COL_CYAN_DIM;
+
+    p->blink_policy = BLINK_POLICY_SLEEPY;
+    strncpy(p->status_label, "SLEEPY...", sizeof(p->status_label) - 1);
+}
+
+static void pose_init_error_sad(face_pose_t *p)
+{
+    pose_init_neutral_friendly(p);
+
+    p->left_eye.width = 28.0f;
+    p->left_eye.height = 38.0f;
+    p->left_eye.center_y = 70.0f;
+    p->left_eye.top_lid = 0.28f;
+    p->left_eye.tilt_deg = -8.0f; // Sad inward droop
+    p->left_eye.color = COL_ERROR;
+
+    p->right_eye.width = 28.0f;
+    p->right_eye.height = 38.0f;
+    p->right_eye.center_y = 70.0f;
+    p->right_eye.top_lid = 0.28f;
+    p->right_eye.tilt_deg = +8.0f;
+    p->right_eye.color = COL_ERROR;
+
+    p->mouth_policy = MOUTH_POLICY_SAD;
+    strncpy(p->status_label, "ERR: SERVER", sizeof(p->status_label) - 1);
+}
+
+static void pose_init_disconnected(face_pose_t *p)
+{
+    pose_init_neutral_friendly(p);
+
+    p->left_eye.shape = EYE_SHAPE_HALF_LID;
+    p->left_eye.height = 24.0f;
+    p->left_eye.top_lid = 0.65f;
+    p->left_eye.color = COL_CYAN_DIM;
+
+    p->right_eye.shape = EYE_SHAPE_HALF_LID;
+    p->right_eye.height = 24.0f;
+    p->right_eye.top_lid = 0.65f;
+    p->right_eye.color = COL_CYAN_DIM;
+
+    strncpy(p->status_label, "OFFLINE", sizeof(p->status_label) - 1);
+}
+
+// -------------------------------------------------------------
+// Non-Blocking Pose Interpolator (Runs every frame)
+// -------------------------------------------------------------
+static void interpolate_eye(eye_params_t *cur, const eye_params_t *tgt, float factor)
+{
+    cur->center_x += (tgt->center_x - cur->center_x) * factor;
+    cur->center_y += (tgt->center_y - cur->center_y) * factor;
+    cur->width += (tgt->width - cur->width) * factor;
+    cur->height += (tgt->height - cur->height) * factor;
+    cur->corner_radius += (tgt->corner_radius - cur->corner_radius) * factor;
+    cur->tilt_deg += (tgt->tilt_deg - cur->tilt_deg) * factor;
+    cur->openness += (tgt->openness - cur->openness) * factor;
+    cur->top_lid += (tgt->top_lid - cur->top_lid) * factor;
+    cur->bottom_lid += (tgt->bottom_lid - cur->bottom_lid) * factor;
+    cur->gaze_x += (tgt->gaze_x - cur->gaze_x) * factor;
+    cur->gaze_y += (tgt->gaze_y - cur->gaze_y) * factor;
+    cur->squash += (tgt->squash - cur->squash) * factor;
+    cur->stretch += (tgt->stretch - cur->stretch) * factor;
+    cur->curvature += (tgt->curvature - cur->curvature) * factor;
+    cur->highlight_int += (tgt->highlight_int - cur->highlight_int) * factor;
+
+    // Instant/near-instant discrete property switch
+    if (factor > 0.15f || fabsf(tgt->openness - cur->openness) < 0.25f) {
+        cur->shape = tgt->shape;
+        cur->color = tgt->color;
+    }
+}
+
+static void update_pose_physics(int64_t now_ms)
 {
     // 1. Boot Sequence
     if (s_current_state == FACE_BOOT) {
         int64_t elapsed = now_ms - s_state_start_ms;
         if (elapsed < 1200) {
-            // Smoothly open eyes: 0.0 -> 1.0
             float prog = (float)elapsed / 1200.0f;
-            s_openness = 0.5f - 0.5f * cosf(prog * 3.14159f);
+            float boot_open = 0.5f - 0.5f * cosf(prog * 3.14159f);
+            s_tgt_pose.left_eye.openness = boot_open;
+            s_tgt_pose.right_eye.openness = boot_open;
         } else {
-            s_openness = 1.0f;
             s_current_state = FACE_IDLE;
             s_state_start_ms = now_ms;
+            s_last_interaction_ms = now_ms;
+            pose_init_neutral_friendly(&s_tgt_pose);
             ESP_LOGI(TAG_FACE, "Boot sequence completed -> Transition to IDLE");
         }
-        return;
     }
 
-    // 2. Happy Timed Hold
-    if (s_current_state == FACE_HAPPY) {
-        if (now_ms >= s_happy_until_ms) {
+    // 2. Timed Hold Expiry (Happy, Confused, Excited, etc.)
+    if (s_timed_hold_until_ms > 0 && now_ms >= s_timed_hold_until_ms) {
+        s_timed_hold_until_ms = 0;
+        if (s_current_state == FACE_HAPPY || s_current_state == FACE_ERROR) {
             s_current_state = FACE_IDLE;
             s_state_start_ms = now_ms;
-        }
-        return;
-    }
-
-    // 3. Error Timed Hold & Auto-recovery
-    if (s_current_state == FACE_ERROR && s_error_until_ms > 0) {
-        if (now_ms >= s_error_until_ms) {
-            s_current_state = FACE_IDLE;
-            s_error_until_ms = 0;
-            s_error_type = FACE_ERR_NONE;
-            s_error_msg[0] = '\0';
+            pose_init_neutral_friendly(&s_tgt_pose);
+        } else if (s_current_state == FACE_IDLE) {
+            pose_init_neutral_friendly(&s_tgt_pose);
         }
     }
 
-    // 4. Disconnected State (Droopy Eyes)
-    if (s_current_state == FACE_DISCONNECTED) {
-        s_target_openness = 0.35f;
-    } else {
-        s_target_openness = 1.0f;
+    // 3. Thinking Orbital Sub-poses
+    if (s_current_state == FACE_THINKING) {
+        if (now_ms >= s_next_thinking_sub_ms) {
+            s_thinking_subpose = (s_thinking_subpose + 1) % 3;
+            pose_init_thinking(&s_tgt_pose, s_thinking_subpose);
+            s_next_thinking_sub_ms = now_ms + 900 + (esp_random() % 600);
+        }
     }
 
-    // 5. Automatic Natural Blinking (IDLE, THINKING, SPEAKING, DISCONNECTED)
-    if (s_current_state != FACE_HAPPY) {
-        if (!s_is_blinking) {
+    // 4. Sleepy Inactivity Detection (35 to 60s without user interaction in IDLE)
+    if (s_current_state == FACE_IDLE && !s_demo_active) {
+        if (!s_is_sleepy && (now_ms - s_last_interaction_ms >= 45000)) {
+            s_is_sleepy = true;
+            pose_init_sleepy(&s_tgt_pose);
+            ESP_LOGI(TAG_FACE, "Inactivity timeout -> Entering SLEEPY state");
+        }
+    }
+
+    // 5. Idle Micro-Expression & Saccade Scheduler
+    if (s_current_state == FACE_IDLE && !s_is_sleepy && !s_demo_active) {
+        // Gaze Saccades
+        if (now_ms >= s_next_glance_ms) {
+            int r = esp_random() % 100;
+            if (r < 35) {
+                s_tgt_pose.left_eye.gaze_x = -4.0f;
+                s_tgt_pose.right_eye.gaze_x = -4.0f;
+            } else if (r < 70) {
+                s_tgt_pose.left_eye.gaze_x = 4.0f;
+                s_tgt_pose.right_eye.gaze_x = 4.0f;
+            } else {
+                s_tgt_pose.left_eye.gaze_y = -3.0f;
+                s_tgt_pose.right_eye.gaze_y = -3.0f;
+            }
+            s_glance_return_ms = now_ms + 900 + (esp_random() % 900);
+            s_next_glance_ms = now_ms + 4000 + (esp_random() % 4000);
+        } else if (s_glance_return_ms > 0 && now_ms >= s_glance_return_ms) {
+            s_tgt_pose.left_eye.gaze_x = 0;
+            s_tgt_pose.left_eye.gaze_y = 0;
+            s_tgt_pose.right_eye.gaze_x = 0;
+            s_tgt_pose.right_eye.gaze_y = 0;
+            s_glance_return_ms = 0;
+        }
+
+        // Curious Asymmetry micro-pose
+        if (now_ms >= s_next_curious_ms) {
+            bool left_big = ((esp_random() % 2) == 0);
+            pose_init_curious(&s_tgt_pose, left_big);
+            s_curious_return_ms = now_ms + 1100 + (esp_random() % 600);
+            s_next_curious_ms = now_ms + 12000 + (esp_random() % 10000);
+        } else if (s_curious_return_ms > 0 && now_ms >= s_curious_return_ms) {
+            pose_init_neutral_friendly(&s_tgt_pose);
+            s_curious_return_ms = 0;
+        }
+
+        // Playful Wink micro-pose
+        if (now_ms >= s_next_playful_ms) {
+            bool left_w = ((esp_random() % 2) == 0);
+            pose_init_wink(&s_tgt_pose, left_w);
+            s_playful_return_ms = now_ms + 750;
+            s_next_playful_ms = now_ms + 25000 + (esp_random() % 15000);
+        } else if (s_playful_return_ms > 0 && now_ms >= s_playful_return_ms) {
+            pose_init_neutral_friendly(&s_tgt_pose);
+            s_playful_return_ms = 0;
+        }
+    }
+
+    // 6. Organic Blinking Physics
+    float blink_factor_l = 1.0f;
+    float blink_factor_r = 1.0f;
+
+    if (s_tgt_pose.blink_policy != BLINK_POLICY_NONE && s_current_state != FACE_BOOT) {
+        if (!s_blink_active) {
             if (s_next_blink_ms == 0 || now_ms >= s_next_blink_ms) {
-                s_is_blinking = true;
+                s_blink_active = true;
                 s_blink_start_ms = now_ms;
-                s_blink_duration_ms = 140 + (esp_random() % 90); // 140ms - 230ms
-                s_double_blink_pending = ((esp_random() % 100) < 18); // 18% double-blink
+                s_blink_dur_ms = (s_tgt_pose.blink_policy == BLINK_POLICY_SLEEPY) ? 420 : (160 + (esp_random() % 70));
+                s_blink_r_delay_ms = (s_tgt_pose.blink_policy == BLINK_POLICY_CURIOUS) ? 35 : (14 + (esp_random() % 14));
+                s_double_blink_pending = ((esp_random() % 100) < 18);
             }
         } else {
-            int64_t blink_elapsed = now_ms - s_blink_start_ms;
-            if (blink_elapsed < s_blink_duration_ms) {
-                float phase = (float)blink_elapsed / (float)s_blink_duration_ms;
-                // Cosine curve: 1.0 -> 0.08 -> 1.0
-                float blink_factor = 0.54f + 0.46f * cosf(phase * 6.28318f);
-                if (blink_factor < 0.08f) blink_factor = 0.08f;
-                s_openness = s_target_openness * blink_factor;
-            } else {
-                s_is_blinking = false;
-                s_openness = s_target_openness;
+            int64_t el_l = now_ms - s_blink_start_ms;
+            int64_t el_r = now_ms - (s_blink_start_ms + s_blink_r_delay_ms);
 
+            // Left Eye Blink
+            if (el_l >= 0 && el_l < s_blink_dur_ms) {
+                float p = (float)el_l / (float)s_blink_dur_ms;
+                blink_factor_l = 0.54f + 0.46f * cosf(p * 6.28318f);
+                if (blink_factor_l < 0.08f) blink_factor_l = 0.08f;
+            }
+
+            // Right Eye Blink (With organic delay)
+            if (el_r >= 0 && el_r < s_blink_dur_ms) {
+                float p = (float)el_r / (float)s_blink_dur_ms;
+                blink_factor_r = 0.54f + 0.46f * cosf(p * 6.28318f);
+                if (blink_factor_r < 0.08f) blink_factor_r = 0.08f;
+            }
+
+            if (el_l >= s_blink_dur_ms + s_blink_r_delay_ms) {
+                s_blink_active = false;
                 if (s_double_blink_pending) {
                     s_double_blink_pending = false;
-                    s_next_blink_ms = now_ms + 120; // Immediate second blink
+                    s_next_blink_ms = now_ms + 110; // Rapid secondary blink
                 } else {
-                    // Next blink in 2.5s to 5.5s
-                    s_next_blink_ms = now_ms + 2500 + (esp_random() % 3000);
+                    int32_t interval = (s_tgt_pose.blink_policy == BLINK_POLICY_SLEEPY) ? 5500 : 3200;
+                    s_next_blink_ms = now_ms + interval + (esp_random() % 2800);
                 }
             }
         }
     }
 
-    // Smoothly ease openness towards target if not blinking
-    if (!s_is_blinking) {
-        s_openness += (s_target_openness - s_openness) * 0.25f;
-    }
+    // 7. Smoothly Interpolate towards target pose (ease-out quadratic lerp)
+    float factor = 0.24f;
+    interpolate_eye(&s_cur_pose.left_eye, &s_tgt_pose.left_eye, factor);
+    interpolate_eye(&s_cur_pose.right_eye, &s_tgt_pose.right_eye, factor);
 
-    // 6. Gaze Shifts (Saccades in IDLE)
-    if (s_current_state == FACE_IDLE) {
-        if (s_next_gaze_shift_ms == 0 || now_ms >= s_next_gaze_shift_ms) {
-            int r = esp_random() % 100;
-            if (r < 35) {
-                s_target_gaze_x = -4.0f; // Look left
-                s_target_gaze_y = 0.0f;
-            } else if (r < 70) {
-                s_target_gaze_x = 4.0f;  // Look right
-                s_target_gaze_y = 0.0f;
-            } else {
-                s_target_gaze_x = 0.0f;  // Center
-                s_target_gaze_y = 0.0f;
-            }
-            s_gaze_return_ms = now_ms + 1000 + (esp_random() % 1200);
-            s_next_gaze_shift_ms = now_ms + 3500 + (esp_random() % 3000);
-        } else if (s_gaze_return_ms > 0 && now_ms >= s_gaze_return_ms) {
-            s_target_gaze_x = 0.0f;
-            s_target_gaze_y = 0.0f;
-            s_gaze_return_ms = 0;
-        }
-    } else if (s_current_state == FACE_THINKING) {
-        s_target_gaze_x = -4.0f;
-        s_target_gaze_y = -3.0f;
-    } else {
-        s_target_gaze_x = 0.0f;
-        s_target_gaze_y = 0.0f;
-    }
+    s_cur_pose.mouth_policy = s_tgt_pose.mouth_policy;
+    s_cur_pose.blink_policy = s_tgt_pose.blink_policy;
 
-    // Smooth saccadic gaze interpolation
-    s_gaze_x += (s_target_gaze_x - s_gaze_x) * 0.20f;
-    s_gaze_y += (s_target_gaze_y - s_gaze_y) * 0.20f;
+    // 8. Render Both Eyes with their respective organic blink factors
+    fb_render_eye(&s_cur_pose.left_eye, blink_factor_l);
+    fb_render_eye(&s_cur_pose.right_eye, blink_factor_r);
 }
 
 // -------------------------------------------------------------
-// Standalone Expression Demo Controller
+// Standalone Expression Demo Controller (27 Complete Steps)
 // -------------------------------------------------------------
 static void demo_mode_tick(int64_t now_ms)
 {
@@ -667,76 +1154,195 @@ static void demo_mode_tick(int64_t now_ms)
         s_demo_step++;
         switch (s_demo_step) {
             case 1:
-                ESP_LOGI(TAG_FACE, ">>> [DEMO 1/12] State: BOOT - Eyes opening gently, 'REGGI BOT'");
-                s_current_state = FACE_BOOT;
-                s_state_start_ms = now_ms;
-                s_openness = 0.0f;
+                ESP_LOGI(TAG_FACE, ">>> [DEMO 1/27] Neutral Friendly");
+                s_current_state = FACE_IDLE;
+                pose_init_neutral_friendly(&s_tgt_pose);
+                strncpy(s_tgt_pose.status_label, "1: NEUTRAL", sizeof(s_tgt_pose.status_label) - 1);
                 s_demo_step_until_ms = now_ms + 1800;
                 break;
             case 2:
-                ESP_LOGI(TAG_FACE, ">>> [DEMO 2/12] State: IDLE - Normal resting eyes");
-                s_current_state = FACE_IDLE;
-                s_target_gaze_x = 0; s_target_gaze_y = 0;
-                s_demo_step_until_ms = now_ms + 2000;
+                ESP_LOGI(TAG_FACE, ">>> [DEMO 2/27] Normal Blink");
+                s_blink_active = true;
+                s_blink_start_ms = now_ms;
+                s_blink_dur_ms = 180;
+                strncpy(s_tgt_pose.status_label, "2: BLINK", sizeof(s_tgt_pose.status_label) - 1);
+                s_demo_step_until_ms = now_ms + 1400;
                 break;
             case 3:
-                ESP_LOGI(TAG_FACE, ">>> [DEMO 3/12] State: BLINK - Natural automatic eyelid blink");
-                s_is_blinking = true;
+                ESP_LOGI(TAG_FACE, ">>> [DEMO 3/27] Double Blink");
+                s_blink_active = true;
                 s_blink_start_ms = now_ms;
-                s_blink_duration_ms = 200;
-                s_demo_step_until_ms = now_ms + 1500;
+                s_blink_dur_ms = 150;
+                s_double_blink_pending = true;
+                strncpy(s_tgt_pose.status_label, "3: DBL BLINK", sizeof(s_tgt_pose.status_label) - 1);
+                s_demo_step_until_ms = now_ms + 1600;
                 break;
             case 4:
-                ESP_LOGI(TAG_FACE, ">>> [DEMO 4/12] State: LOOK LEFT - Gaze saccade left");
-                s_target_gaze_x = -5.0f; s_target_gaze_y = 0;
+                ESP_LOGI(TAG_FACE, ">>> [DEMO 4/27] Glance Left");
+                s_tgt_pose.left_eye.gaze_x = -5.0f;
+                s_tgt_pose.right_eye.gaze_x = -5.0f;
+                strncpy(s_tgt_pose.status_label, "4: GLANCE L", sizeof(s_tgt_pose.status_label) - 1);
                 s_demo_step_until_ms = now_ms + 1600;
                 break;
             case 5:
-                ESP_LOGI(TAG_FACE, ">>> [DEMO 5/12] State: LOOK RIGHT - Gaze saccade right");
-                s_target_gaze_x = 5.0f; s_target_gaze_y = 0;
+                ESP_LOGI(TAG_FACE, ">>> [DEMO 5/27] Glance Right");
+                s_tgt_pose.left_eye.gaze_x = 5.0f;
+                s_tgt_pose.right_eye.gaze_x = 5.0f;
+                strncpy(s_tgt_pose.status_label, "5: GLANCE R", sizeof(s_tgt_pose.status_label) - 1);
                 s_demo_step_until_ms = now_ms + 1600;
                 break;
             case 6:
-                ESP_LOGI(TAG_FACE, ">>> [DEMO 6/12] State: LISTENING - Wide bright electric eyes");
-                s_current_state = FACE_LISTENING;
-                s_target_gaze_x = 0; s_target_gaze_y = 0;
-                s_demo_step_until_ms = now_ms + 2000;
+                ESP_LOGI(TAG_FACE, ">>> [DEMO 6/27] Glance Up");
+                s_tgt_pose.left_eye.gaze_x = 0; s_tgt_pose.left_eye.gaze_y = -4.0f;
+                s_tgt_pose.right_eye.gaze_x = 0; s_tgt_pose.right_eye.gaze_y = -4.0f;
+                strncpy(s_tgt_pose.status_label, "6: GLANCE UP", sizeof(s_tgt_pose.status_label) - 1);
+                s_demo_step_until_ms = now_ms + 1600;
                 break;
             case 7:
-                ESP_LOGI(TAG_FACE, ">>> [DEMO 7/12] State: THINKING - Looking up-left + orbital dots");
-                s_current_state = FACE_THINKING;
-                s_demo_step_until_ms = now_ms + 2500;
+                ESP_LOGI(TAG_FACE, ">>> [DEMO 7/27] Curious, Left Eye Bigger");
+                pose_init_curious(&s_tgt_pose, true);
+                strncpy(s_tgt_pose.status_label, "7: CURIOUS L", sizeof(s_tgt_pose.status_label) - 1);
+                s_demo_step_until_ms = now_ms + 2000;
                 break;
             case 8:
-                ESP_LOGI(TAG_FACE, ">>> [DEMO 8/12] State: SPEAKING - Soundwave mouth bars animating");
-                s_current_state = FACE_SPEAKING;
-                s_audio_level_in = 0.8f;
-                s_demo_step_until_ms = now_ms + 3000;
+                ESP_LOGI(TAG_FACE, ">>> [DEMO 8/27] Curious, Right Eye Bigger");
+                pose_init_curious(&s_tgt_pose, false);
+                strncpy(s_tgt_pose.status_label, "8: CURIOUS R", sizeof(s_tgt_pose.status_label) - 1);
+                s_demo_step_until_ms = now_ms + 2000;
                 break;
             case 9:
-                ESP_LOGI(TAG_FACE, ">>> [DEMO 9/12] State: HAPPY - Cheerful smiling crescent eyes");
-                s_current_state = FACE_HAPPY;
-                s_happy_until_ms = now_ms + 2200;
-                s_demo_step_until_ms = now_ms + 2200;
+                ESP_LOGI(TAG_FACE, ">>> [DEMO 9/27] Attentive Listening");
+                s_current_state = FACE_LISTENING;
+                pose_init_attentive_listening(&s_tgt_pose);
+                strncpy(s_tgt_pose.status_label, "9: LISTEN", sizeof(s_tgt_pose.status_label) - 1);
+                s_demo_step_until_ms = now_ms + 2000;
                 break;
             case 10:
-                ESP_LOGI(TAG_FACE, ">>> [DEMO 10/12] State: ERROR - Slanted coral eyes, 'ERR: SERVER'");
-                s_current_state = FACE_ERROR;
-                strncpy(s_error_msg, "ERR: SERVER", sizeof(s_error_msg) - 1);
-                s_demo_step_until_ms = now_ms + 2200;
+                ESP_LOGI(TAG_FACE, ">>> [DEMO 10/27] Thinking Up-Left");
+                s_current_state = FACE_THINKING;
+                pose_init_thinking(&s_tgt_pose, 0);
+                strncpy(s_tgt_pose.status_label, "10: THINK L", sizeof(s_tgt_pose.status_label) - 1);
+                s_demo_step_until_ms = now_ms + 2000;
                 break;
             case 11:
-                ESP_LOGI(TAG_FACE, ">>> [DEMO 11/12] State: DISCONNECTED - Sleepy droopy eyes, 'OFFLINE'");
-                s_current_state = FACE_DISCONNECTED;
-                s_wifi_status = WIFI_OFF;
-                s_demo_step_until_ms = now_ms + 2200;
+                ESP_LOGI(TAG_FACE, ">>> [DEMO 11/27] Thinking Up-Right");
+                s_current_state = FACE_THINKING;
+                pose_init_thinking(&s_tgt_pose, 1);
+                strncpy(s_tgt_pose.status_label, "11: THINK R", sizeof(s_tgt_pose.status_label) - 1);
+                s_demo_step_until_ms = now_ms + 2000;
                 break;
             case 12:
+                ESP_LOGI(TAG_FACE, ">>> [DEMO 12/27] Speaking Low Level");
+                s_current_state = FACE_SPEAKING;
+                pose_init_speaking(&s_tgt_pose);
+                s_audio_level_in = 0.25f;
+                strncpy(s_tgt_pose.status_label, "12: SPEAK LOW", sizeof(s_tgt_pose.status_label) - 1);
+                s_demo_step_until_ms = now_ms + 1800;
+                break;
+            case 13:
+                ESP_LOGI(TAG_FACE, ">>> [DEMO 13/27] Speaking Mid Level");
+                s_current_state = FACE_SPEAKING;
+                pose_init_speaking(&s_tgt_pose);
+                s_audio_level_in = 0.60f;
+                strncpy(s_tgt_pose.status_label, "13: SPEAK MID", sizeof(s_tgt_pose.status_label) - 1);
+                s_demo_step_until_ms = now_ms + 1800;
+                break;
+            case 14:
+                ESP_LOGI(TAG_FACE, ">>> [DEMO 14/27] Speaking High Level");
+                s_current_state = FACE_SPEAKING;
+                pose_init_speaking(&s_tgt_pose);
+                s_audio_level_in = 0.95f;
+                strncpy(s_tgt_pose.status_label, "14: SPEAK HIGH", sizeof(s_tgt_pose.status_label) - 1);
+                s_demo_step_until_ms = now_ms + 1800;
+                break;
+            case 15:
+                ESP_LOGI(TAG_FACE, ">>> [DEMO 15/27] Happy Soft");
+                s_current_state = FACE_HAPPY;
+                pose_init_happy_soft(&s_tgt_pose);
+                strncpy(s_tgt_pose.status_label, "15: HAPPY SOFT", sizeof(s_tgt_pose.status_label) - 1);
+                s_demo_step_until_ms = now_ms + 2000;
+                break;
+            case 16:
+                ESP_LOGI(TAG_FACE, ">>> [DEMO 16/27] Happy Big");
+                s_current_state = FACE_HAPPY;
+                pose_init_happy_big(&s_tgt_pose);
+                strncpy(s_tgt_pose.status_label, "16: HAPPY BIG", sizeof(s_tgt_pose.status_label) - 1);
+                s_demo_step_until_ms = now_ms + 2200;
+                break;
+            case 17:
+                ESP_LOGI(TAG_FACE, ">>> [DEMO 17/27] Excited");
+                s_current_state = FACE_IDLE;
+                pose_init_excited(&s_tgt_pose);
+                strncpy(s_tgt_pose.status_label, "17: EXCITED", sizeof(s_tgt_pose.status_label) - 1);
+                s_demo_step_until_ms = now_ms + 2000;
+                break;
+            case 18:
+                ESP_LOGI(TAG_FACE, ">>> [DEMO 18/27] Surprised");
+                s_current_state = FACE_IDLE;
+                pose_init_surprised(&s_tgt_pose);
+                strncpy(s_tgt_pose.status_label, "18: SURPRISED", sizeof(s_tgt_pose.status_label) - 1);
+                s_demo_step_until_ms = now_ms + 2000;
+                break;
+            case 19:
+                ESP_LOGI(TAG_FACE, ">>> [DEMO 19/27] Playful Squint");
+                pose_init_playful_squint(&s_tgt_pose);
+                strncpy(s_tgt_pose.status_label, "19: SQUINT", sizeof(s_tgt_pose.status_label) - 1);
+                s_demo_step_until_ms = now_ms + 2000;
+                break;
+            case 20:
+                ESP_LOGI(TAG_FACE, ">>> [DEMO 20/27] Wink Left");
+                pose_init_wink(&s_tgt_pose, true);
+                strncpy(s_tgt_pose.status_label, "20: WINK L", sizeof(s_tgt_pose.status_label) - 1);
+                s_demo_step_until_ms = now_ms + 1800;
+                break;
+            case 21:
+                ESP_LOGI(TAG_FACE, ">>> [DEMO 21/27] Wink Right");
+                pose_init_wink(&s_tgt_pose, false);
+                strncpy(s_tgt_pose.status_label, "21: WINK R", sizeof(s_tgt_pose.status_label) - 1);
+                s_demo_step_until_ms = now_ms + 1800;
+                break;
+            case 22:
+                ESP_LOGI(TAG_FACE, ">>> [DEMO 22/27] Confused");
+                pose_init_confused(&s_tgt_pose);
+                strncpy(s_tgt_pose.status_label, "22: CONFUSED", sizeof(s_tgt_pose.status_label) - 1);
+                s_demo_step_until_ms = now_ms + 2200;
+                break;
+            case 23:
+                ESP_LOGI(TAG_FACE, ">>> [DEMO 23/27] Sleepy");
+                pose_init_sleepy(&s_tgt_pose);
+                strncpy(s_tgt_pose.status_label, "23: SLEEPY", sizeof(s_tgt_pose.status_label) - 1);
+                s_demo_step_until_ms = now_ms + 2200;
+                break;
+            case 24:
+                ESP_LOGI(TAG_FACE, ">>> [DEMO 24/27] Error Sad");
+                s_current_state = FACE_ERROR;
+                pose_init_error_sad(&s_tgt_pose);
+                strncpy(s_tgt_pose.status_label, "24: ERR SAD", sizeof(s_tgt_pose.status_label) - 1);
+                s_demo_step_until_ms = now_ms + 2200;
+                break;
+            case 25:
+                ESP_LOGI(TAG_FACE, ">>> [DEMO 25/27] Disconnected");
+                s_current_state = FACE_DISCONNECTED;
+                pose_init_disconnected(&s_tgt_pose);
+                s_wifi_status = WIFI_OFF;
+                strncpy(s_tgt_pose.status_label, "25: OFFLINE", sizeof(s_tgt_pose.status_label) - 1);
+                s_demo_step_until_ms = now_ms + 2200;
+                break;
+            case 26:
+                ESP_LOGI(TAG_FACE, ">>> [DEMO 26/27] Reconnection Recovery");
+                s_current_state = FACE_HAPPY;
+                s_wifi_status = WIFI_CONNECTED_STABLE;
+                pose_init_happy_soft(&s_tgt_pose);
+                strncpy(s_tgt_pose.status_label, "26: RECOVERED", sizeof(s_tgt_pose.status_label) - 1);
+                s_demo_step_until_ms = now_ms + 2000;
+                break;
+            case 27:
             default:
-                ESP_LOGI(TAG_FACE, ">>> [DEMO 12/12] Demo Complete! Returning to normal IDLE state.");
+                ESP_LOGI(TAG_FACE, ">>> [DEMO 27/27] Return to Neutral Friendly. Demo Complete!");
                 s_current_state = FACE_IDLE;
                 s_wifi_status = WIFI_CONNECTED_STABLE;
-                s_error_msg[0] = '\0';
+                pose_init_neutral_friendly(&s_tgt_pose);
+                strncpy(s_tgt_pose.status_label, "READY", sizeof(s_tgt_pose.status_label) - 1);
                 s_demo_active = false;
                 break;
         }
@@ -748,42 +1354,46 @@ static void demo_mode_tick(int64_t now_ms)
 // -------------------------------------------------------------
 static void face_task(void *arg)
 {
-    ESP_LOGI(TAG_FACE, "Face animation rendering task started (Priority 2, 20 FPS)");
+    ESP_LOGI(TAG_FACE, "Organic face animation task started (Priority 2, 20 FPS)");
 
-    const TickType_t frame_period_ticks = pdMS_TO_TICKS(50); // 20 FPS
+    const TickType_t frame_period_ticks = pdMS_TO_TICKS(50);
     s_fps_window_start_ms = esp_timer_get_time() / 1000;
 
     while (true) {
         int64_t t_frame_start = esp_timer_get_time();
         int64_t now_ms = t_frame_start / 1000;
 
-        // 1. Check live audio level from audio_player
+        // 1. Live audio level from audio_player
         float player_lev = audio_player_get_level();
         if (player_lev > 0.01f) {
             s_audio_level_in = player_lev;
         }
 
-        // 2. Demo tick or physics update
+        // 2. Clear frame to pitch black
+        memset(s_framebuf, 0, SCREEN_W * SCREEN_H * sizeof(uint16_t));
+
+        // 3. Render Top Header (Wi-Fi + Battery)
+        render_header(now_ms);
+
+        // 4. Update Physics & Render Dynamic Eyes
         if (s_demo_active) {
             demo_mode_tick(now_ms);
         }
-        update_animation_physics(now_ms);
+        update_pose_physics(now_ms);
 
-        // 3. Render frame into RAM framebuffer
-        // Clear screen to solid black
-        memset(s_framebuf, 0, SCREEN_W * SCREEN_H * sizeof(uint16_t));
+        // 5. Render Mouth & Thinking Orbit
+        render_mouth(now_ms);
+        render_thinking_orbit(now_ms);
 
-        // Render layers
-        render_header();
-        render_face(now_ms);
+        // 6. Render Minimal Status Banner
         render_status_banner();
 
-        // 4. Push rendered frame to ST7735 display via SPI DMA in one blast
+        // 7. Blast frame buffer over SPI DMA to ST7735 in one single burst
         if (s_disp) {
             board_display_send_bitmap(s_disp, 0, 0, SCREEN_W, SCREEN_H, s_framebuf);
         }
 
-        // 5. Measure render metrics
+        // 8. Performance Metrics Calculation
         int64_t t_frame_end = esp_timer_get_time();
         float render_ms = (float)(t_frame_end - t_frame_start) / 1000.0f;
 
@@ -799,7 +1409,7 @@ static void face_task(void *arg)
             s_fps_window_start_ms = now_ms;
         }
 
-        // Yield to other tasks for remaining frame time
+        // Yield for the remainder of the 50ms period
         vTaskDelay(frame_period_ticks);
     }
 }
@@ -832,8 +1442,16 @@ esp_err_t board_face_init(board_display_t *disp)
     }
 
     s_state_start_ms = esp_timer_get_time() / 1000;
+    s_last_interaction_ms = s_state_start_ms;
     s_current_state = FACE_BOOT;
-    s_openness = 0.0f;
+
+    pose_init_neutral_friendly(&s_cur_pose);
+    s_cur_pose.left_eye.openness = 0.0f;
+    s_cur_pose.right_eye.openness = 0.0f;
+
+    pose_init_neutral_friendly(&s_tgt_pose);
+    s_tgt_pose.left_eye.openness = 1.0f;
+    s_tgt_pose.right_eye.openness = 1.0f;
 
     if (!s_face_task_handle) {
         BaseType_t ok = xTaskCreate(face_task, "face_task", 4096, NULL, 2, &s_face_task_handle);
@@ -843,22 +1461,56 @@ esp_err_t board_face_init(board_display_t *disp)
         }
     }
 
-    ESP_LOGI(TAG_FACE, "Face Engine initialized successfully (Framebuffer: %zu bytes)",
+    ESP_LOGI(TAG_FACE, "Organic Face Engine initialized (Framebuffer: %zu bytes)",
              SCREEN_W * SCREEN_H * sizeof(uint16_t));
     return ESP_OK;
 }
 
 void board_face_set_state(face_state_t state)
 {
-    if (s_demo_active) return; // Don't override while demo is running
+    if (s_demo_active) return; // Don't override while demo is active
+
+    int64_t now_ms = esp_timer_get_time() / 1000;
+    s_last_interaction_ms = now_ms;
+    s_is_sleepy = false;
 
     if (s_current_state != state) {
         s_current_state = state;
-        s_state_start_ms = esp_timer_get_time() / 1000;
+        s_state_start_ms = now_ms;
         s_custom_status[0] = '\0';
+        s_timed_hold_until_ms = 0;
 
-        if (state == FACE_ERROR) {
-            s_error_until_ms = s_state_start_ms + 3000;
+        switch (state) {
+            case FACE_BOOT:
+                pose_init_neutral_friendly(&s_tgt_pose);
+                s_tgt_pose.left_eye.openness = 0.0f;
+                s_tgt_pose.right_eye.openness = 0.0f;
+                break;
+            case FACE_IDLE:
+                pose_init_neutral_friendly(&s_tgt_pose);
+                break;
+            case FACE_LISTENING:
+                pose_init_attentive_listening(&s_tgt_pose);
+                break;
+            case FACE_THINKING:
+                s_thinking_subpose = 0;
+                s_next_thinking_sub_ms = now_ms + 900;
+                pose_init_thinking(&s_tgt_pose, 0);
+                break;
+            case FACE_SPEAKING:
+                pose_init_speaking(&s_tgt_pose);
+                break;
+            case FACE_HAPPY:
+                pose_init_happy_soft(&s_tgt_pose);
+                s_timed_hold_until_ms = now_ms + 1200;
+                break;
+            case FACE_ERROR:
+                pose_init_error_sad(&s_tgt_pose);
+                s_timed_hold_until_ms = now_ms + 3000;
+                break;
+            case FACE_DISCONNECTED:
+                pose_init_disconnected(&s_tgt_pose);
+                break;
         }
     }
 }
@@ -889,9 +1541,73 @@ void board_face_set_error(face_error_type_t err_type, const char *short_msg)
 
 void board_face_trigger_happy(uint32_t duration_ms)
 {
+    int64_t now_ms = esp_timer_get_time() / 1000;
+    s_last_interaction_ms = now_ms;
+    s_is_sleepy = false;
     s_current_state = FACE_HAPPY;
-    s_state_start_ms = esp_timer_get_time() / 1000;
-    s_happy_until_ms = s_state_start_ms + ((duration_ms > 0) ? duration_ms : 1200);
+    pose_init_happy_soft(&s_tgt_pose);
+    s_timed_hold_until_ms = now_ms + ((duration_ms > 0) ? duration_ms : 1200);
+}
+
+void board_face_trigger_happy_big(uint32_t duration_ms)
+{
+    int64_t now_ms = esp_timer_get_time() / 1000;
+    s_last_interaction_ms = now_ms;
+    s_is_sleepy = false;
+    s_current_state = FACE_HAPPY;
+    pose_init_happy_big(&s_tgt_pose);
+    s_timed_hold_until_ms = now_ms + ((duration_ms > 0) ? duration_ms : 1500);
+}
+
+void board_face_trigger_curious(bool left_larger, uint32_t duration_ms)
+{
+    int64_t now_ms = esp_timer_get_time() / 1000;
+    s_last_interaction_ms = now_ms;
+    s_is_sleepy = false;
+    pose_init_curious(&s_tgt_pose, left_larger);
+    s_timed_hold_until_ms = now_ms + ((duration_ms > 0) ? duration_ms : 1500);
+}
+
+void board_face_trigger_confused(uint32_t duration_ms)
+{
+    int64_t now_ms = esp_timer_get_time() / 1000;
+    s_last_interaction_ms = now_ms;
+    s_is_sleepy = false;
+    pose_init_confused(&s_tgt_pose);
+    s_timed_hold_until_ms = now_ms + ((duration_ms > 0) ? duration_ms : 2000);
+}
+
+void board_face_trigger_excited(uint32_t duration_ms)
+{
+    int64_t now_ms = esp_timer_get_time() / 1000;
+    s_last_interaction_ms = now_ms;
+    s_is_sleepy = false;
+    pose_init_excited(&s_tgt_pose);
+    s_timed_hold_until_ms = now_ms + ((duration_ms > 0) ? duration_ms : 1200);
+}
+
+void board_face_trigger_surprised(uint32_t duration_ms)
+{
+    int64_t now_ms = esp_timer_get_time() / 1000;
+    s_last_interaction_ms = now_ms;
+    s_is_sleepy = false;
+    pose_init_surprised(&s_tgt_pose);
+    s_timed_hold_until_ms = now_ms + ((duration_ms > 0) ? duration_ms : 1200);
+}
+
+void board_face_trigger_wink(bool left_eye, uint32_t duration_ms)
+{
+    int64_t now_ms = esp_timer_get_time() / 1000;
+    s_last_interaction_ms = now_ms;
+    s_is_sleepy = false;
+    pose_init_wink(&s_tgt_pose, left_eye);
+    s_timed_hold_until_ms = now_ms + ((duration_ms > 0) ? duration_ms : 800);
+}
+
+void board_face_trigger_sleepy(void)
+{
+    s_is_sleepy = true;
+    pose_init_sleepy(&s_tgt_pose);
 }
 
 void board_face_set_status_text(const char *text)
@@ -922,7 +1638,6 @@ void board_face_set_wifi_status(wifi_status_t status)
         }
     } else if ((status == WIFI_CONNECTED || status == WIFI_CONNECTED_STABLE) &&
                (prev == WIFI_OFF || prev == WIFI_ERROR || s_current_state == FACE_DISCONNECTED)) {
-        // Reconnected! Flash happy briefly
         board_face_trigger_happy(1200);
     }
 }
@@ -937,7 +1652,7 @@ void board_face_trigger_demo(void)
     s_demo_active = true;
     s_demo_step = 0;
     s_demo_step_until_ms = esp_timer_get_time() / 1000;
-    ESP_LOGI(TAG_FACE, "Starting Standalone Expression Demonstration Mode (12 States)...");
+    ESP_LOGI(TAG_FACE, "Starting Standalone Expression Demonstration Mode (27 Complete Steps)...");
 }
 
 bool board_face_is_demo_active(void)
