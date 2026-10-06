@@ -50,10 +50,13 @@ static inline int16_t mic_sample_to_int16(int32_t sample_32bit)
 
 board_audio_t* board_audio_init(void)
 {
+    static bool s_initialized = false;
     board_audio_t *audio = &g_audio_instance;
-    memset(audio, 0, sizeof(struct board_audio_s));
-    
-    ESP_LOGI(TAG, "Audio intialized (WakeNet Removed)");
+    if (!s_initialized) {
+        memset(audio, 0, sizeof(struct board_audio_s));
+        s_initialized = true;
+        ESP_LOGI(TAG, "Audio initialized");
+    }
     return audio;
 }
 
@@ -119,12 +122,8 @@ esp_err_t board_audio_mic_start(board_audio_t *audio)
 
 void board_audio_mic_stop(board_audio_t *audio)
 {
-    if (audio && audio->rx_handle) {
-        i2s_channel_disable(audio->rx_handle);
-        i2s_del_channel(audio->rx_handle);
-        audio->rx_handle = NULL;
-    }
-    if (audio) audio->mic_ready = false;
+    // Keep I2S RX channel allocated for instant capture and seamless wake word listening
+    (void)audio;
 }
 
 board_audio_wake_result_t board_audio_process_wake_word(board_audio_t *audio)

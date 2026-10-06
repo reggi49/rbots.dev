@@ -2,6 +2,7 @@ idf_component_register(
     SRCS
         "board.c"
         "voice_chat.c"
+        "wake_word_sr.c"
         "audio_player.c"
         "selftest.c"
         "cloud_client.c"

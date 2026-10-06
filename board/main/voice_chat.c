@@ -82,7 +82,7 @@ esp_err_t voice_chat_init(void)
     return ESP_OK;
 }
 
-esp_err_t voice_chat_trigger_turn(uint32_t duration_sec)
+esp_err_t voice_chat_trigger_turn(uint32_t duration_sec, rbot_trigger_t trigger)
 {
     if (duration_sec == 0) duration_sec = 5;
     if (duration_sec > 15) duration_sec = 15;
@@ -91,10 +91,10 @@ esp_err_t voice_chat_trigger_turn(uint32_t duration_sec)
     const uint32_t total_samples = duration_sec * sample_rate;
     const size_t buf_bytes = total_samples * sizeof(int16_t);
     const size_t wav_header_len = 44;
-    const size_t total_upload_len = wav_header_len + buf_bytes;
     const float hpf_alpha = 0.96586f;
 
-    ESP_LOGI(TAG_VC, "=== Starting Voice Chat Turn (%u sec record) ===", (unsigned)duration_sec);
+    ESP_LOGI(TAG_VC, "=== Starting Voice Chat Turn (%u sec max, trigger=%d) ===",
+             (unsigned)duration_sec, (int)trigger);
 
     // 0. Check Wi-Fi
     wifi_status_t wf = board_get_wifi_status();
@@ -133,12 +133,16 @@ esp_err_t voice_chat_trigger_turn(uint32_t duration_sec)
         return ESP_FAIL;
     }
 
-    // 2. Countdown 3.. 2.. 1..
-    for (int cd = 3; cd >= 1; cd--) {
-        char msg[24];
-        snprintf(msg, sizeof(msg), "TALK IN %d", cd);
-        update_status(AI_LISTENING, msg, false, 0.0f);
-        vTaskDelay(pdMS_TO_TICKS(1000));
+    // 2. Visual Prompt & Countdown
+    if (trigger != TRIGGER_WAKE_WORD) {
+        for (int cd = 2; cd >= 1; cd--) {
+            char msg[24];
+            snprintf(msg, sizeof(msg), "TALK IN %d", cd);
+            update_status(AI_LISTENING, msg, false, 0.0f);
+            vTaskDelay(pdMS_TO_TICKS(800));
+        }
+    } else {
+        update_status(AI_LISTENING, "LISTENING...", true, 0.8f);
     }
 
     // 3. Start Mic & Discard Pre-roll
@@ -159,8 +163,8 @@ esp_err_t voice_chat_trigger_turn(uint32_t duration_sec)
         else break;
     }
 
-    // 4. Recording Loop
-    ESP_LOGI(TAG_VC, "🎤 RECORDING NOW (%u seconds)...", (unsigned)duration_sec);
+    // 4. Recording Loop with Silence / VAD Early-Stopping
+    ESP_LOGI(TAG_VC, "🎤 RECORDING NOW (max %u seconds)...", (unsigned)duration_sec);
     int32_t raw_chunk[128];
     float prev_x = 0.0f, prev_y = 0.0f;
     uint32_t captured = 0;
@@ -168,13 +172,18 @@ esp_err_t voice_chat_trigger_turn(uint32_t duration_sec)
     int64_t sum_sq = 0;
     int current_rec_sec = -1;
 
+    bool speech_detected = false;
+    uint32_t silent_samples = 0;
+    const uint32_t silence_cutoff_samples = 24000; // 1.5s of silence after speech
+    const uint32_t min_speech_samples = 16000;     // at least 1.0s before early stop
+
     while (captured < total_samples) {
         int rem_rec_sec = (int)((total_samples - captured + sample_rate - 1) / sample_rate);
         if (rem_rec_sec < 1) rem_rec_sec = 1;
         if (rem_rec_sec != current_rec_sec) {
             current_rec_sec = rem_rec_sec;
             char msg[24];
-            snprintf(msg, sizeof(msg), "RECORDING %d", rem_rec_sec);
+            snprintf(msg, sizeof(msg), "LISTENING %d", rem_rec_sec);
             update_status(AI_LISTENING, msg, true, 0.8f);
         }
 
@@ -186,6 +195,8 @@ esp_err_t voice_chat_trigger_turn(uint32_t duration_sec)
         }
 
         size_t samples = bytes_read / sizeof(int32_t);
+        int64_t chunk_sum_sq = 0;
+
         for (size_t i = 0; i < samples && captured < total_samples; i++) {
             int16_t s = inmp441_to_pcm16(raw_chunk[i]);
             float x = (float)s;
@@ -202,6 +213,22 @@ esp_err_t voice_chat_trigger_turn(uint32_t duration_sec)
             int32_t a = (s_clean < 0) ? -s_clean : s_clean;
             if (a > peak) peak = a;
             sum_sq += (int64_t)s_clean * s_clean;
+            chunk_sum_sq += (int64_t)s_clean * s_clean;
+        }
+
+        // Energy-based silence detection
+        if (samples > 0) {
+            float chunk_rms = sqrtf((float)chunk_sum_sq / samples);
+            if (chunk_rms > 1000.0f) {
+                speech_detected = true;
+                silent_samples = 0;
+            } else if (speech_detected && captured >= min_speech_samples) {
+                silent_samples += samples;
+                if (silent_samples >= silence_cutoff_samples) {
+                    ESP_LOGI(TAG_VC, "Silence detected (1.5s), stopping recording early at %u samples", (unsigned)captured);
+                    break;
+                }
+            }
         }
     }
 
@@ -210,14 +237,17 @@ esp_err_t voice_chat_trigger_turn(uint32_t duration_sec)
     ESP_LOGI(TAG_VC, "Recording finished: %u samples (RMS: %.0f, Peak: %d)",
              (unsigned)captured, rms, (int)peak);
 
+    const size_t actual_buf_bytes = captured * sizeof(int16_t);
+    const size_t actual_upload_len = wav_header_len + actual_buf_bytes;
+
     // 5. Send Audio via HTTP POST to Backend
     update_status(AI_THINKING, "THINKING...", true, 0.5f);
-    ESP_LOGI(TAG_VC, "Sending audio to backend: %s", s_backend_url);
+    ESP_LOGI(TAG_VC, "Sending audio (%u bytes) to backend: %s", (unsigned)actual_upload_len, s_backend_url);
 
-    // Prepare 44-byte WAV header
+    // Prepare 44-byte WAV header with actual length
     uint8_t header[44] = {0};
     memcpy(header, "RIFF", 4);
-    uint32_t chunk_size = (uint32_t)(total_upload_len - 8);
+    uint32_t chunk_size = (uint32_t)(actual_upload_len - 8);
     header[4] = chunk_size & 0xFF;
     header[5] = (chunk_size >> 8) & 0xFF;
     header[6] = (chunk_size >> 16) & 0xFF;
@@ -236,10 +266,10 @@ esp_err_t voice_chat_trigger_turn(uint32_t duration_sec)
     header[32] = 2; header[33] = 0;  // Block align
     header[34] = 16; header[35] = 0; // 16-bit
     memcpy(header + 36, "data", 4);
-    header[40] = buf_bytes & 0xFF;
-    header[41] = (buf_bytes >> 8) & 0xFF;
-    header[42] = (buf_bytes >> 16) & 0xFF;
-    header[43] = (buf_bytes >> 24) & 0xFF;
+    header[40] = actual_buf_bytes & 0xFF;
+    header[41] = (actual_buf_bytes >> 8) & 0xFF;
+    header[42] = (actual_buf_bytes >> 16) & 0xFF;
+    header[43] = (actual_buf_bytes >> 24) & 0xFF;
 
     esp_http_client_config_t http_cfg = {
         .url = s_backend_url,
@@ -259,7 +289,7 @@ esp_err_t voice_chat_trigger_turn(uint32_t duration_sec)
 
     esp_http_client_set_header(client, "Content-Type", "audio/wav");
 
-    err = esp_http_client_open(client, total_upload_len);
+    err = esp_http_client_open(client, actual_upload_len);
     if (err != ESP_OK) {
         ESP_LOGE(TAG_VC, "Failed to open HTTP connection: %d", err);
         esp_http_client_cleanup(client);
@@ -275,8 +305,8 @@ esp_err_t voice_chat_trigger_turn(uint32_t duration_sec)
     const size_t chunk_sz = 1024;
     size_t sent = 0;
     const uint8_t *raw_pcm = (const uint8_t *)buf;
-    while (sent < buf_bytes) {
-        size_t to_send = buf_bytes - sent;
+    while (sent < actual_buf_bytes) {
+        size_t to_send = actual_buf_bytes - sent;
         if (to_send > chunk_sz) to_send = chunk_sz;
         int written = esp_http_client_write(client, (const char *)(raw_pcm + sent), to_send);
         if (written < 0) {

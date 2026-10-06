@@ -39,9 +39,94 @@
 #include "wake_word_runtime.h" // [1.1.27]
 #include "selftest.h"
 #include "voice_chat.h"
+#include "wake_word_sr.h"
 
 #define TAG_STATE "STATE"
 #define TAG_FEATURE "FEATURE"
+
+// --- Unified Interaction Queue ---
+typedef struct {
+    rbot_trigger_t trigger;
+    uint32_t duration_sec;
+} turn_request_t;
+
+static QueueHandle_t s_turn_queue = NULL;
+static volatile bool s_interaction_busy = false;
+
+static void on_wake_word_detected(const char *word_name, int word_index)
+{
+    ESP_LOGI(TAG_STATE, "🗣️ [WAKENET] Wake word '%s' detected! (index %d)", word_name, word_index);
+    if (s_interaction_busy) {
+        ESP_LOGW(TAG_STATE, "Interaction already in progress, skipping wake trigger");
+        return;
+    }
+    turn_request_t req = {
+        .trigger = TRIGGER_WAKE_WORD,
+        .duration_sec = 6,
+    };
+    if (s_turn_queue) {
+        xQueueSend(s_turn_queue, &req, 0);
+    }
+}
+
+static void interaction_task(void *arg)
+{
+    turn_request_t req;
+    while (1) {
+        if (xQueueReceive(s_turn_queue, &req, portMAX_DELAY) == pdTRUE) {
+            s_interaction_busy = true;
+            ESP_LOGI(TAG_STATE, "▶️ [INTERACTION] Starting conversational turn (trigger=%d, dur=%u s)",
+                     (int)req.trigger, (unsigned)req.duration_sec);
+
+            // 1. Suspend wake word listening immediately (strict half-duplex)
+            wake_word_sr_suspend();
+
+            // 2. Immediate visual reaction on wake word
+            if (req.trigger == TRIGGER_WAKE_WORD) {
+                board_face_trigger_curious(true, 300);
+                vTaskDelay(pdMS_TO_TICKS(100));
+            }
+
+            // 3. Perform conversational turn
+            voice_chat_trigger_turn(req.duration_sec, req.trigger);
+
+            // 4. Cooldown (500 ms)
+            vTaskDelay(pdMS_TO_TICKS(500));
+
+            // 5. Flush microphone DMA queue to eliminate residual speaker echo
+            board_audio_t *audio = board_audio_init();
+            if (audio) {
+                int32_t discard[128];
+                size_t br = 0;
+                for (int i = 0; i < 10; i++) {
+                    board_audio_read(audio, discard, sizeof(discard), &br, pdMS_TO_TICKS(10));
+                }
+            }
+
+            // 6. Resume wake word listening and set face to IDLE
+            wake_word_sr_resume();
+            board_face_set_state(FACE_IDLE);
+
+            s_interaction_busy = false;
+            ESP_LOGI(TAG_STATE, "✅ [INTERACTION] Turn finished, returned to IDLE listening");
+        }
+    }
+}
+
+static void rbot_request_turn(rbot_trigger_t trigger, uint32_t dur)
+{
+    if (s_interaction_busy) {
+        ESP_LOGW(TAG_STATE, "Interaction busy, ignoring trigger");
+        return;
+    }
+    turn_request_t req = {
+        .trigger = trigger,
+        .duration_sec = dur,
+    };
+    if (s_turn_queue) {
+        xQueueSend(s_turn_queue, &req, 0);
+    }
+}
 
 // --- Global Handles ---
 board_display_t *g_disp = NULL;
@@ -1075,14 +1160,20 @@ static void cli_task(void *arg) {
                     if (parsed > 0 && parsed <= 15) dur = (uint32_t)parsed;
                 }
                 ESP_LOGI("CLI", "Command received: Voice Chat Turn (%u s)", (unsigned)dur);
-                voice_chat_trigger_turn(dur);
+                rbot_request_turn(TRIGGER_CLI, dur);
+            } else if (strstr(line, "WW") || strstr(line, "ww") || strstr(line, "WAKE") || strstr(line, "wake")) {
+                printf("[WW_STATUS] Model: %s, Word: '%s', Listening: %s\r\n",
+                       wake_word_sr_get_model_name(),
+                       wake_word_sr_get_word_name(),
+                       wake_word_sr_is_listening() ? "YES" : "NO");
+                fflush(stdout);
             } else if (strstr(line, "SET_URL") || strstr(line, "set_url")) {
                 char *sp = strchr(line, ' ');
                 if (sp) {
                     voice_chat_set_backend_url(sp + 1);
                 }
             } else {
-                printf("Commands: PING, TEST_FACE, METRICS, FACE [STATE], TALK [sec], RECORD [sec], ECHO [sec], PLAY, TONE, TFT, MIC\r\n");
+                printf("Commands: PING, TEST_FACE, METRICS, WW, FACE [STATE], TALK [sec], RECORD [sec], ECHO [sec], PLAY, TONE, TFT, MIC\r\n");
                 fflush(stdout);
             }
         }
@@ -1148,18 +1239,33 @@ void app_main(void)
     };
     gpio_config(&touch_cfg);
 
-    // 5. Start CLI task for USB Serial commands
+    // 5. Setup Unified Interaction Task & Queue
+    s_turn_queue = xQueueCreate(2, sizeof(turn_request_t));
+    xTaskCreatePinnedToCore(interaction_task, "interact_task", 12288, NULL, 5, NULL, 1);
+    esp_rom_printf("✅ [APP_MAIN] Unified interaction task started\r\n");
+
+    // 6. Initialize and start ESP-SR Local Wake Word Engine
+    esp_rom_printf("[APP_MAIN] Initializing ESP-SR WakeNet engine...\r\n");
+    esp_err_t ww_err = wake_word_sr_init(on_wake_word_detected);
+    if (ww_err == ESP_OK) {
+        wake_word_sr_start();
+        esp_rom_printf("✅ [APP_MAIN] ESP-SR WakeNet engine listening for '%s'\r\n", wake_word_sr_get_word_name());
+    } else {
+        esp_rom_printf("⚠️ [APP_MAIN] WakeNet init failed: %d\r\n", ww_err);
+    }
+
+    // 7. Start CLI task for USB Serial commands
     xTaskCreate(cli_task, "cli_task", 8192, NULL, 5, NULL);
     esp_rom_printf("✅ [APP_MAIN] CLI task started!\r\n");
 
-    ESP_LOGI("MAIN", "\n*** Rbot ready! Send 'TALK' / 'TEST_FACE' via Serial or touch GPIO 14 for Voice Chat ***\n");
+    ESP_LOGI("MAIN", "\n*** Rbot ready! Say '%s' or send 'TALK' / touch GPIO 14 ***\n", wake_word_sr_get_word_name());
 
     int last_touch = 1;
     while(1) {
         int touch = gpio_get_level(PIN_TOUCH);
         if (touch == 0 && last_touch == 1) { // Pressed / touched
-            ESP_LOGI("MAIN", "Touch/Button on GPIO %d pressed! Starting Voice Chat Turn (5s)...", PIN_TOUCH);
-            voice_chat_trigger_turn(5);
+            ESP_LOGI("MAIN", "Touch/Button on GPIO %d pressed! Starting Voice Chat Turn...", PIN_TOUCH);
+            rbot_request_turn(TRIGGER_BUTTON, 5);
         }
         last_touch = touch;
 
