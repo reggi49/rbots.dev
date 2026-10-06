@@ -62,7 +62,7 @@ static void on_wake_word_detected(const char *word_name, int word_index)
     }
     turn_request_t req = {
         .trigger = TRIGGER_WAKE_WORD,
-        .duration_sec = 6,
+        .duration_sec = 10,
     };
     if (s_turn_queue) {
         xQueueSend(s_turn_queue, &req, 0);
@@ -1153,7 +1153,7 @@ static void cli_task(void *arg) {
                 }
 
             } else if (strstr(line, "TALK") || strstr(line, "talk") || strstr(line, "CHAT") || strstr(line, "chat")) {
-                uint32_t dur = 5;
+                uint32_t dur = 10;
                 char *sp = strchr(line, ' ');
                 if (sp) {
                     int parsed = atoi(sp + 1);
@@ -1265,7 +1265,7 @@ void app_main(void)
         int touch = gpio_get_level(PIN_TOUCH);
         if (touch == 0 && last_touch == 1) { // Pressed / touched
             ESP_LOGI("MAIN", "Touch/Button on GPIO %d pressed! Starting Voice Chat Turn...", PIN_TOUCH);
-            rbot_request_turn(TRIGGER_BUTTON, 5);
+            rbot_request_turn(TRIGGER_BUTTON, 10);
         }
         last_touch = touch;
 

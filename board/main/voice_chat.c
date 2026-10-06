@@ -219,7 +219,7 @@ esp_err_t voice_chat_trigger_turn(uint32_t duration_sec, rbot_trigger_t trigger)
         // Energy-based silence detection
         if (samples > 0) {
             float chunk_rms = sqrtf((float)chunk_sum_sq / samples);
-            if (chunk_rms > 1000.0f) {
+            if (chunk_rms > 350.0f) {
                 speech_detected = true;
                 silent_samples = 0;
             } else if (speech_detected && captured >= min_speech_samples) {

@@ -25,7 +25,9 @@
 static const char *TAG_WW = "WAKE_WORD_SR";
 
 // Digital gain shift for INMP441 (24-bit in 32-bit container)
-#define INMP441_DIGITAL_GAIN_SHIFT 6
+// Shift 5 gives +6dB gain boost (2x amplification) compared to shift 6,
+// greatly improving acoustic sensitivity from normal room speaking distance (0.5m - 1.5m)
+#define INMP441_DIGITAL_GAIN_SHIFT 5
 
 static inline int16_t inmp441_to_pcm16(int32_t raw_sample)
 {
@@ -47,8 +49,8 @@ static TaskHandle_t s_ww_task_handle = NULL;
 static wake_word_detected_cb_t s_detected_cb = NULL;
 
 static volatile bool s_listening = false;
-static char s_active_model_name[32] = "wn9_hiesp";
-static char s_active_word_name[32] = "Hi ESP";
+static char s_active_model_name[32] = "wn9_alexa";
+static char s_active_word_name[32] = "Alexa";
 
 static void wake_word_task(void *arg);
 
@@ -71,33 +73,30 @@ esp_err_t wake_word_sr_init(wake_word_detected_cb_t callback)
                  s_models->model_info[i] ? s_models->model_info[i] : "(none)");
     }
 
-    // 2. Fallback hierarchy & diagnosis
-    // Primary: wn10_en_heybuddy (WakeNet10, "Hey Buddy")
+    // 2. Model selection hierarchy
+    // Check for Alexa (wn9_alexa), Hey Buddy, or Hi ESP (wn9_hiesp)
+    int idx_alexa = esp_srmodel_exists(s_models, "wn9_alexa");
     int idx_heybuddy = esp_srmodel_exists(s_models, "wn10_en_heybuddy");
-    // Fallback 1: wn10_hiesp (WakeNet10, "Hi ESP")
-    int idx_wn10_hiesp = esp_srmodel_exists(s_models, "wn10_hiesp");
-    // Fallback 2: wn9_hiesp (WakeNet9, "Hi ESP")
     int idx_wn9_hiesp = esp_srmodel_exists(s_models, "wn9_hiesp");
 
-    if (idx_heybuddy >= 0) {
+    if (idx_alexa >= 0) {
+        strncpy(s_active_model_name, "wn9_alexa", sizeof(s_active_model_name) - 1);
+        strncpy(s_active_word_name, "Alexa", sizeof(s_active_word_name) - 1);
+        ESP_LOGI(TAG_WW, "🎯 Selected PRIMARY WakeNet Model: %s (Wake Word: '%s')", s_active_model_name, s_active_word_name);
+    } else if (idx_heybuddy >= 0) {
         strncpy(s_active_model_name, "wn10_en_heybuddy", sizeof(s_active_model_name) - 1);
         strncpy(s_active_word_name, "Hey Buddy", sizeof(s_active_word_name) - 1);
         ESP_LOGI(TAG_WW, "Selected PRIMARY Model: %s (Wake Word: '%s')", s_active_model_name, s_active_word_name);
-    } else if (idx_wn10_hiesp >= 0) {
-        ESP_LOGW(TAG_WW, "Primary 'wn10_en_heybuddy' not found. Selected Fallback 1: %s", "wn10_hiesp");
-        strncpy(s_active_model_name, "wn10_hiesp", sizeof(s_active_model_name) - 1);
-        strncpy(s_active_word_name, "Hi ESP", sizeof(s_active_word_name) - 1);
     } else if (idx_wn9_hiesp >= 0) {
-        ESP_LOGW(TAG_WW, "Primary 'wn10_en_heybuddy' and 'wn10_hiesp' (WakeNet10) not present in ESP-SR 2.1.1.");
-        ESP_LOGI(TAG_WW, "Selected TECHNICAL FALLBACK 2: %s (WakeNet9, Wake Word: '%s')", "wn9_hiesp", "Hi ESP");
         strncpy(s_active_model_name, "wn9_hiesp", sizeof(s_active_model_name) - 1);
         strncpy(s_active_word_name, "Hi ESP", sizeof(s_active_word_name) - 1);
+        ESP_LOGI(TAG_WW, "Selected FALLBACK Model: %s (Wake Word: '%s')", s_active_model_name, s_active_word_name);
     } else {
         // Fallback to first available wake model
         char *filt = esp_srmodel_filter(s_models, ESP_WN_PREFIX, NULL);
         if (filt) {
             strncpy(s_active_model_name, filt, sizeof(s_active_model_name) - 1);
-            strncpy(s_active_word_name, "Hi ESP", sizeof(s_active_word_name) - 1);
+            strncpy(s_active_word_name, "Alexa", sizeof(s_active_word_name) - 1);
             ESP_LOGW(TAG_WW, "Selected available model: %s", s_active_model_name);
         } else {
             ESP_LOGE(TAG_WW, "No compatible WakeNet models found in partition!");
@@ -114,9 +113,12 @@ esp_err_t wake_word_sr_init(wake_word_detected_cb_t callback)
 
     afe_config->wakenet_init = true;
     afe_config->wakenet_model_name = s_active_model_name;
-    afe_config->wakenet_mode = DET_MODE_95; // High sensitivity
+    afe_config->wakenet_mode = DET_MODE_95; // High sensitivity (Aggressive, 95% target)
     afe_config->memory_alloc_mode = AFE_MEMORY_ALLOC_MORE_PSRAM;
     afe_config->afe_ringbuf_size = 50;
+    afe_config->agc_init = true;
+    afe_config->agc_mode = AFE_AGC_MODE_WAKENET;
+    afe_config->afe_linear_gain = 1.5f;
 
     afe_config_print(afe_config);
 
