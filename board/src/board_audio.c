@@ -98,7 +98,7 @@ esp_err_t board_audio_mic_start(board_audio_t *audio)
     
     // INMP441: LEFT channel only (L/R pin = GND selects LEFT)
     std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_LEFT;
-
+    
     err = i2s_channel_init_std_mode(audio->rx_handle, &std_cfg);
     if (err != ESP_OK) {
         i2s_del_channel(audio->rx_handle);

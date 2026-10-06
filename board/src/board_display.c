@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "esp_timer.h"
+#include "esp_attr.h"
 #include "board_types.h"
 
 #define TAG "BD_DISP"
@@ -74,10 +75,14 @@ static esp_err_t st7735_transmit(board_display_t *disp, const uint8_t *data, siz
     if (len == 0) return ESP_OK;
 
     gpio_set_level(PIN_TFT_DC, is_data ? 1 : 0);
-    spi_transaction_t trans = {
-        .length = len * 8,
-        .tx_buffer = data
-    };
+    spi_transaction_t trans = {0};
+    trans.length = len * 8;
+    if (len <= 4) {
+        trans.flags = SPI_TRANS_USE_TXDATA;
+        memcpy(trans.tx_data, data, len);
+    } else {
+        trans.tx_buffer = data;
+    }
 
     return spi_device_transmit(disp->spi_handle, &trans);
 }
@@ -127,7 +132,7 @@ static void tft_fill_rect(board_display_t *disp, uint16_t x, uint16_t y, uint16_
     size_t total = w * h;
     
     const size_t buf_size = 256;
-    uint8_t line_buf[512]; 
+    static DMA_ATTR uint8_t line_buf[512]; 
     for(int i=0; i<buf_size; i++) {
         line_buf[i*2] = px[0];
         line_buf[i*2+1] = px[1];
@@ -270,35 +275,73 @@ static void tft_draw_text3x5_scaled(board_display_t *disp, uint16_t x, uint16_t 
 static void tft_draw_ai_overlay_text(board_display_t *disp, const char *text, uint16_t fg, uint8_t scale)
 {
     if (!text || text[0] == '\0') return;
-    if (scale == 0) scale = 1;
+    if (scale == 0) scale = 2;
     char prepared[AI_TEXT_MAX];
     chat_prepare_text(prepared, text);
-    const uint16_t pad = 6;
-    int max_line_chars = (AI_RECT_W - pad * 2) / (4 * scale);
-    if (max_line_chars < 1) max_line_chars = 1;
-    const int max_lines = 2;
-    int x = AI_RECT_X + pad;
-    int y = AI_RECT_Y + pad;
-    char line[AI_TEXT_MAX];
-    int line_idx = 0;
-    int line_count = 0;
-    size_t i = 0;
-    while (prepared[i] != '\0' && line_count < max_lines) {
-        char ch = prepared[i++];
-        if (ch == '\n' || line_idx >= max_line_chars) {
-            line[line_idx] = '\0';
-            if (line_idx > 0) tft_draw_text3x5_scaled(disp, x, y, line, fg, scale);
-            line_idx = 0;
-            line_count++;
-            y += (6 * scale);
-            if (line_count >= max_lines) break;
-            if (ch == '\n') continue;
+
+    char line1[32] = {0};
+    char line2[32] = {0};
+
+    char *newline_pos = strchr(prepared, '\n');
+    if (newline_pos) {
+        size_t len1 = newline_pos - prepared;
+        if (len1 >= sizeof(line1)) len1 = sizeof(line1) - 1;
+        strncpy(line1, prepared, len1);
+        line1[len1] = '\0';
+        strncpy(line2, newline_pos + 1, sizeof(line2) - 1);
+        line2[sizeof(line2) - 1] = '\0';
+    } else {
+        size_t len = strlen(prepared);
+        if (len <= 13) {
+            strncpy(line1, prepared, sizeof(line1) - 1);
+        } else {
+            int split_idx = -1;
+            for (int i = 0; i < (int)len && i <= 12; i++) {
+                if (prepared[i] == ' ') split_idx = i;
+            }
+            if (split_idx > 0) {
+                strncpy(line1, prepared, split_idx);
+                line1[split_idx] = '\0';
+                const char *p2 = prepared + split_idx + 1;
+                while (*p2 == ' ') p2++;
+                strncpy(line2, p2, sizeof(line2) - 1);
+            } else {
+                strncpy(line1, prepared, 12);
+                line1[12] = '\0';
+                strncpy(line2, prepared + 12, sizeof(line2) - 1);
+            }
         }
-        line[line_idx++] = ch;
     }
-    if (line_idx > 0 && line_count < max_lines) {
-        line[line_idx] = '\0';
-        tft_draw_text3x5_scaled(disp, x, y, line, fg, scale);
+
+    for (int l = 0; l < 2; l++) {
+        char *target = (l == 0) ? line1 : line2;
+        int sl = strlen(target);
+        while (sl > 0 && target[sl - 1] == ' ') {
+            target[sl - 1] = '\0';
+            sl--;
+        }
+    }
+
+    uint8_t num_lines = (line2[0] != '\0') ? 2 : 1;
+    uint16_t char_w = 4 * scale;
+    uint16_t line_h = 6 * scale;
+    uint16_t total_h = num_lines * line_h;
+    uint16_t start_y = AI_RECT_Y + (AI_RECT_H - total_h) / 2;
+
+    if (line1[0] != '\0') {
+        int l1_len = strlen(line1);
+        int l1_w = l1_len * char_w - (1 * scale);
+        int l1_x = AI_RECT_X + (AI_RECT_W - l1_w) / 2;
+        if (l1_x < AI_RECT_X + 2) l1_x = AI_RECT_X + 2;
+        tft_draw_text3x5_scaled(disp, l1_x, start_y, line1, fg, scale);
+    }
+
+    if (num_lines == 2 && line2[0] != '\0') {
+        int l2_len = strlen(line2);
+        int l2_w = l2_len * char_w - (1 * scale);
+        int l2_x = AI_RECT_X + (AI_RECT_W - l2_w) / 2;
+        if (l2_x < AI_RECT_X + 2) l2_x = AI_RECT_X + 2;
+        tft_draw_text3x5_scaled(disp, l2_x, start_y + line_h, line2, fg, scale);
     }
 }
 
@@ -400,6 +443,10 @@ static void draw_robot_face(board_display_t *disp, face_state_t face, blink_stat
 
 board_display_t *board_display_init(void)
 {
+    if (g_display_instance.spi_handle != NULL) {
+        return &g_display_instance;
+    }
+
     ESP_LOGI(TAG, "TFT init start");
 
 #if PIN_TFT_BL >= 0
@@ -714,83 +761,82 @@ static void tft_draw_battery_icon(board_display_t *disp, battery_state_t state, 
 static void tft_draw_ai_overlay_legacy(board_display_t *disp, ai_state_t state, const char *text, bool phase, int64_t wake_until_ms)
 {
     // Top-bar badge
-    const uint16_t badge_x = 60;
+    const uint16_t badge_x = 54;
     const uint16_t badge_y = 5;
-    const uint16_t badge_w = 36;
+    const uint16_t badge_w = 44;
     const uint16_t badge_h = 14;
-    const uint16_t badge_bg = color565(0, 0, 0);
-    const uint16_t badge_fg = color565(0, 0, 0);
+    const uint16_t badge_fg = color565(255, 255, 255);
 
-    const uint16_t badge_bg_idle = color565(60, 60, 60);
-    const uint16_t badge_bg_list = color565(50, 90, 170);
-    const uint16_t badge_bg_think = color565(30, 60, 120);
-    const uint16_t badge_bg_ans = color565(0, 110, 110);
-    const uint16_t badge_bg_err = color565(160, 40, 40);
+    const uint16_t badge_bg_idle = color565(50, 60, 70);
+    const uint16_t badge_bg_list = color565(30, 80, 180);
+    const uint16_t badge_bg_think = color565(40, 60, 140);
+    const uint16_t badge_bg_ans = color565(0, 140, 120);
+    const uint16_t badge_bg_err = color565(180, 40, 40);
 
     uint16_t current_badge_bg = badge_bg_idle;
-    const char *label = "IDLE";
-    uint16_t text_off_x = 10; // Default for 4 chars (IDLE)
+    const char *label = "READY";
+    uint16_t text_off_x = 12;
 
     switch (state) {
-        case AI_LISTENING: label = "LIST"; current_badge_bg = badge_bg_list; text_off_x = 10; break;
-        case AI_THINKING: label = "THNK"; current_badge_bg = badge_bg_think; text_off_x = 10; break;
-        case AI_ANSWERING: label = "SPK"; current_badge_bg = badge_bg_ans; text_off_x = 12; break; // 3 chars
-        case AI_ERROR: label = "ERR"; current_badge_bg = badge_bg_err; text_off_x = 12; break; // 3 chars
-        default: label = "IDLE"; current_badge_bg = badge_bg_idle; text_off_x = 10; break;
+        case AI_LISTENING: label = "LISTEN"; current_badge_bg = badge_bg_list; text_off_x = 10; break;
+        case AI_THINKING: label = "THINK"; current_badge_bg = badge_bg_think; text_off_x = 12; break;
+        case AI_ANSWERING: label = "SPEAK"; current_badge_bg = badge_bg_ans; text_off_x = 12; break;
+        case AI_ERROR: label = "ERR"; current_badge_bg = badge_bg_err; text_off_x = 16; break;
+        default: label = "READY"; current_badge_bg = badge_bg_idle; text_off_x = 12; break;
     }
 
     tft_fill_rect(disp, badge_x, badge_y, badge_w, badge_h, current_badge_bg);
     int64_t now_ms = esp_timer_get_time() / 1000;
-    if (1 && wake_until_ms > now_ms) { // Force wake check
+    if (wake_until_ms > now_ms) {
         tft_fill_rect(disp, badge_x, badge_y, badge_w, badge_h, color565(0, 200, 200));
-        tft_draw_text3x5(disp, badge_x + 10, badge_y + 4, "WAKE", color565(0, 0, 0)); // WAKE is 4 chars -> 10 offset
+        tft_draw_text3x5(disp, badge_x + 14, badge_y + 4, "WAKE", color565(0, 0, 0));
     } else {
         tft_draw_text3x5(disp, badge_x + text_off_x, badge_y + 4, label, badge_fg);
     }
 
     const uint16_t bg = color565(0, 0, 0);
-    const uint16_t listening = color565(50, 90, 170);
-    const uint16_t thinking = color565(30, 60, 120);
-    const uint16_t answering = color565(0, 110, 110);
+    const uint16_t listening = color565(20, 60, 140);
+    const uint16_t thinking = color565(30, 40, 100);
+    const uint16_t answering = color565(0, 110, 95);
     const uint16_t error = color565(160, 40, 40);
-    const uint16_t fg = color565(240, 240, 240);
+    const uint16_t fg = color565(255, 255, 255);
     const uint16_t accent = color565(255, 255, 0);
 
     tft_fill_rect(disp, AI_RECT_X, AI_RECT_Y, AI_RECT_W, AI_RECT_H, bg);
 
     if (wake_until_ms > now_ms) {
-        tft_fill_rect(disp, AI_RECT_X, AI_RECT_Y, 40, 12, color565(0, 200, 200));
-        tft_draw_text3x5(disp, AI_RECT_X + 4, AI_RECT_Y + 4, "WAKE", color565(0, 0, 0));
+        tft_fill_rect(disp, AI_RECT_X, AI_RECT_Y, AI_RECT_W, AI_RECT_H, color565(0, 140, 150));
+        tft_draw_ai_overlay_text(disp, "WAKE ACCEPTED", color565(0, 0, 0), 2);
         return;
     }
 
     switch (state) {
-        case AI_IDLE:
-            tft_fill_rect(disp, AI_RECT_X, AI_RECT_Y, 24, 12, color565(60, 60, 60));
-            tft_draw_text3x5(disp, AI_RECT_X + 4, AI_RECT_Y + 4, "IDLE", fg);
+        case AI_IDLE: {
+            if (text && text[0]) {
+                tft_fill_rect(disp, AI_RECT_X, AI_RECT_Y, AI_RECT_W, AI_RECT_H, color565(15, 22, 32));
+                tft_draw_ai_overlay_text(disp, text, color565(180, 220, 255), 2);
+            } else {
+                tft_fill_rect(disp, AI_RECT_X, AI_RECT_Y, AI_RECT_W, AI_RECT_H, color565(15, 22, 32));
+                tft_draw_ai_overlay_text(disp, "RBOT READY", color565(180, 220, 255), 2);
+            }
             return;
+        }
         case AI_LISTENING: {
             tft_fill_rect(disp, AI_RECT_X, AI_RECT_Y, AI_RECT_W, AI_RECT_H, listening);
-            uint16_t cy = AI_RECT_Y + AI_RECT_H / 2;
-            uint16_t cx = AI_RECT_X + AI_RECT_W / 2;
-            tft_fill_rect(disp, cx - 22, cy - 8, 14, 14, fg);
-            tft_fill_rect(disp, cx + 8, cy - 8, 14, 14, fg);
+            const char *msg = (text && text[0]) ? text : "RBOT LISTENING";
+            tft_draw_ai_overlay_text(disp, msg, fg, 2);
             break;
         }
         case AI_THINKING: {
             tft_fill_rect(disp, AI_RECT_X, AI_RECT_Y, AI_RECT_W, AI_RECT_H, thinking);
-            uint16_t cy = AI_RECT_Y + AI_RECT_H / 2;
-            uint16_t start_x = AI_RECT_X + AI_RECT_W / 2 - 18;
-            uint16_t dot = phase ? fg : accent;
-            for (int i = 0; i < 3; i++) {
-                tft_fill_rect(disp, start_x + i * 16, cy - 5, 10, 10, dot);
-                dot = fg;
-            }
+            const char *msg = (text && text[0]) ? text : "RBOT THINKING";
+            tft_draw_ai_overlay_text(disp, msg, accent, 2);
             break;
         }
         case AI_ANSWERING: {
             tft_fill_rect(disp, AI_RECT_X, AI_RECT_Y, AI_RECT_W, AI_RECT_H, answering);
-            tft_draw_ai_overlay_text(disp, text, fg, 2);
+            const char *msg = (text && text[0]) ? text : "RBOT SPEAKING";
+            tft_draw_ai_overlay_text(disp, msg, fg, 2);
             break;
         }
         case AI_ERROR: {

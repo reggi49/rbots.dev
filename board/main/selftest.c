@@ -16,6 +16,14 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "driver/usb_serial_jtag_vfs.h"
+#include "driver/uart_vfs.h"
+#include "sdkconfig.h"
+
+#if CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG
+#define CONSOLE_SET_TX_EOL(m) usb_serial_jtag_vfs_set_tx_line_endings(m)
+#else
+#define CONSOLE_SET_TX_EOL(m) uart_vfs_dev_port_set_tx_line_endings(0, m)
+#endif
 #include <math.h>
 #include <string.h>
 
@@ -42,10 +50,10 @@ esp_err_t selftest_speaker_tone(void)
         return err;
     }
 
-    /* Generate 2 seconds of 1 kHz sine at ~100% amplitude (MAX LOUDNESS FOR TEST) */
+    /* Generate 0.8 second of 1 kHz sine at comfortable, clear amplitude */
     const float freq = 1000.0f;
-    const float amplitude = 32767.0f;          /* FULL INT16_MAX for loudest test  */
-    const uint32_t total_samples = sample_rate * 2;
+    const float amplitude = 24000.0f;          /* Clean amplitude preventing power dips */
+    const uint32_t total_samples = (uint32_t)(sample_rate * 0.8f);
     const size_t chunk = 256;
     int16_t buf[256];
 
@@ -59,7 +67,7 @@ esp_err_t selftest_speaker_tone(void)
     }
 
     /* Wait for ring-buffer to drain */
-    audio_player_wait_empty(4000);
+    audio_player_wait_empty(2000);
     audio_player_stop();
 
     ESP_LOGI(TAG_ST, "Speaker tone test DONE");
@@ -133,6 +141,7 @@ esp_err_t selftest_mic_rms(void)
         ESP_LOGE(TAG_ST, "mic_start failed: 0x%x", err);
         return err;
     }
+
     ESP_LOGI(TAG_ST, "Mic started - LISTENING for 1 second...");
 
     const uint32_t target_samples = 16000; /* 1 s @ 16 kHz */
@@ -163,21 +172,23 @@ esp_err_t selftest_mic_rms(void)
 
         size_t samples = bytes_read / sizeof(int32_t);
         for (size_t i = 0; i < samples; i++) {
-            /* INMP441: 24-bit in bits [31:8] → scale to 16-bit */
-            int32_t s24 = raw[i] >> 8;
+            int32_t s32 = raw[i];
+            int32_t s24 = s32 >> 8;
             if (s24 & 0x00800000) s24 |= 0xFF000000;
             int32_t s16 = s24 >> 8;
             if (s16 > 32767)  s16 = 32767;
             if (s16 < -32768) s16 = -32768;
 
-            sum_sq += (int64_t)s16 * s16;
             int32_t abs_s = (s16 < 0) ? -s16 : s16;
+            sum_sq += (int64_t)s16 * s16;
             if (abs_s > peak) peak = abs_s;
+
             total++;
             
-            // Log first few samples
-            if (total <= 5) {
-                ESP_LOGI(TAG_ST, "  Sample %u: raw24=%d → s16=%d", total, s24, s16);
+            // Log first 10 raw values
+            if (total <= 10) {
+                ESP_LOGI(TAG_ST, "  Sample %u: raw32=0x%08X (raw24=%d) → s16=%d",
+                         total, (unsigned)s32, s24, s16);
             }
         }
     }
@@ -189,7 +200,7 @@ esp_err_t selftest_mic_rms(void)
     ESP_LOGI(TAG_ST, "Total samples: %u", total);
     ESP_LOGI(TAG_ST, "Total reads: %u", reads);
     ESP_LOGI(TAG_ST, "RMS level: %.0f", rms);
-    ESP_LOGI(TAG_ST, "Peak value: %d", (int)peak);
+    ESP_LOGI(TAG_ST, "Peak: %d", (int)peak);
     ESP_LOGI(TAG_ST, "================================\n");
 
     if (total == 0) {
@@ -232,89 +243,19 @@ static inline int16_t inmp441_to_pcm16(int32_t raw_sample)
 esp_err_t selftest_mic_stream(uint32_t duration_sec)
 {
     if (duration_sec == 0) duration_sec = 5;
-    const uint32_t sample_rate = 16000;
-    const uint32_t total_samples = duration_sec * sample_rate;
-    const float hpf_alpha = 0.96586f; // 90 Hz 1st-order IIR HPF @ 16 kHz
-
-    board_audio_t *audio = board_audio_init();
-    if (!audio) return ESP_FAIL;
-
-    esp_err_t err = board_audio_mic_start(audio);
-    if (err != ESP_OK) return err;
-
-    // Discard 100ms pre-roll (1600 samples)
-    int32_t discard_buf[128];
-    uint32_t discarded = 0;
-    while (discarded < 1600) {
-        size_t br = 0;
-        board_audio_read(audio, discard_buf, sizeof(discard_buf), &br, pdMS_TO_TICKS(100));
-        if (br > 0) discarded += (br / sizeof(int32_t));
-        else break;
-    }
-
-    // Handshake marker for Python
-    printf("START_RECORD\n");
-    fflush(stdout);
-
-    // CRITICAL: Disable CRLF translation so binary audio bytes (0x0A) are NOT mangled into 0x0D 0x0A!
-    usb_serial_jtag_vfs_set_tx_line_endings(ESP_LINE_ENDINGS_LF);
-
-    int32_t raw_buf[128];
-    int16_t pcm_buf[128];
-    float prev_x = 0.0f, prev_y = 0.0f;
-    uint32_t samples_captured = 0;
-
-    while (samples_captured < total_samples) {
-        size_t bytes_read = 0;
-        err = board_audio_read(audio, raw_buf, sizeof(raw_buf), &bytes_read, pdMS_TO_TICKS(500));
-        if (err == ESP_OK && bytes_read > 0) {
-            size_t n = bytes_read / sizeof(int32_t);
-            for (size_t i = 0; i < n && (samples_captured + i) < total_samples; i++) {
-                int16_t raw_s16 = inmp441_to_pcm16(raw_buf[i]);
-                float x = (float)raw_s16;
-                float y = hpf_alpha * (prev_y + x - prev_x);
-                prev_x = x;
-                prev_y = y;
-                if (y > 32767.0f) y = 32767.0f;
-                else if (y < -32768.0f) y = -32768.0f;
-                pcm_buf[i] = (int16_t)y;
-            }
-            size_t chunk_samples = (samples_captured + n <= total_samples) ? n : (total_samples - samples_captured);
-            fwrite(pcm_buf, sizeof(int16_t), chunk_samples, stdout);
-            fflush(stdout);
-            samples_captured += chunk_samples;
-        } else if (err != ESP_OK) {
-            break;
-        }
-    }
-
-    board_audio_mic_stop(audio);
-    usb_serial_jtag_vfs_set_tx_line_endings(ESP_LINE_ENDINGS_CRLF);
-    printf("\nEND_RECORD\n");
-    fflush(stdout);
-    return ESP_OK;
-}
-
-/* ──────────────────────────────────────────────────────── */
-/*  2c. Mic to Speaker Loopback (Parrot / Echo Test)       */
-/* ──────────────────────────────────────────────────────── */
-
-esp_err_t selftest_mic_speaker_loopback(uint32_t duration_sec)
-{
-    if (duration_sec == 0) duration_sec = 3;
+    if (duration_sec > 30) duration_sec = 30;
     const uint32_t sample_rate = 16000;
     const uint32_t total_samples = duration_sec * sample_rate;
     const size_t buf_bytes = total_samples * sizeof(int16_t);
-    const float hpf_alpha = 0.96586f;
-
-    ESP_LOGI(TAG_ST, "=== Loopback Parrot Test (%u s) ===", (unsigned)duration_sec);
+    const float hpf_alpha = 0.96586f; // 90 Hz 1st-order IIR HPF @ 16 kHz
 
     int16_t *buf = (int16_t *)heap_caps_malloc(buf_bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!buf) {
         buf = (int16_t *)malloc(buf_bytes);
     }
     if (!buf) {
-        ESP_LOGE(TAG_ST, "Failed to allocate %zu bytes for loopback", buf_bytes);
+        ESP_LOGE(TAG_ST, "Failed to allocate %zu bytes for recording", buf_bytes);
+        printf("RECORD_ERR no_mem\r\n");
         return ESP_ERR_NO_MEM;
     }
 
@@ -326,6 +267,136 @@ esp_err_t selftest_mic_speaker_loopback(uint32_t duration_sec)
 
     esp_err_t err = board_audio_mic_start(audio);
     if (err != ESP_OK) {
+        free(buf);
+        return err;
+    }
+
+    // Discard 100ms pre-roll (1600 samples)
+    int32_t discard_buf[128];
+    uint32_t discarded = 0;
+    while (discarded < 1600) {
+        size_t br = 0;
+        board_audio_read(audio, discard_buf, sizeof(discard_buf), &br, pdMS_TO_TICKS(100));
+        if (br > 0) discarded += (br / sizeof(int32_t));
+        else break;
+    }
+
+    // Signal Python to start recording timer
+    printf("START_RECORD\r\n");
+    fflush(stdout);
+
+    int32_t raw_buf[128];
+    float prev_x = 0.0f, prev_y = 0.0f;
+    uint32_t captured = 0;
+
+    // Capture uninterrupted at 16000 Hz into PSRAM
+    while (captured < total_samples) {
+        size_t bytes_read = 0;
+        err = board_audio_read(audio, raw_buf, sizeof(raw_buf), &bytes_read, pdMS_TO_TICKS(500));
+        if (err == ESP_OK && bytes_read > 0) {
+            size_t n = bytes_read / sizeof(int32_t);
+            for (size_t i = 0; i < n && captured < total_samples; i++) {
+                int16_t raw_s16 = inmp441_to_pcm16(raw_buf[i]);
+                float x = (float)raw_s16;
+                float y = hpf_alpha * (prev_y + x - prev_x);
+                prev_x = x;
+                prev_y = y;
+                if (y > 32767.0f) y = 32767.0f;
+                else if (y < -32768.0f) y = -32768.0f;
+                buf[captured++] = (int16_t)y;
+            }
+        } else if (err != ESP_OK) {
+            break;
+        }
+    }
+
+    board_audio_mic_stop(audio);
+
+    // Handshake to notify Python recording phase has ended and stream transfer begins
+    printf("STREAM_START\r\n");
+    fflush(stdout);
+
+    // CRITICAL: Disable CRLF translation so binary audio bytes (0x0A) are NOT mangled into 0x0D 0x0A!
+    CONSOLE_SET_TX_EOL(ESP_LINE_ENDINGS_LF);
+
+    // Transmit recorded PCM16 buffer to host in 512-byte chunks
+    const uint8_t *pcm_bytes = (const uint8_t *)buf;
+    size_t total_bytes_to_send = captured * sizeof(int16_t);
+    size_t offset = 0;
+    while (offset < total_bytes_to_send) {
+        size_t chunk = (total_bytes_to_send - offset > 512) ? 512 : (total_bytes_to_send - offset);
+        fwrite(pcm_bytes + offset, 1, chunk, stdout);
+        offset += chunk;
+    }
+    fflush(stdout);
+
+    free(buf);
+
+    CONSOLE_SET_TX_EOL(ESP_LINE_ENDINGS_CRLF);
+    printf("\nEND_RECORD\r\n");
+    fflush(stdout);
+    return ESP_OK;
+}
+
+/* ──────────────────────────────────────────────────────── */
+/*  2c. Mic to Speaker Loopback (Parrot / Echo Test)       */
+/* ──────────────────────────────────────────────────────── */
+
+/* Draw a status on the LCD AND print the same text on serial ("STATUS:<text>")
+ * so the host script (parrot_voice.py) stays in sync with the screen. */
+static void parrot_status(ai_state_t st, const char *msg, bool anim, float level)
+{
+    extern board_display_t *g_disp;
+    if (g_disp) {
+        board_display_draw_overlay(g_disp, st, msg, WIFI_OFF, NET_UNKNOWN, BAT_FULL,
+                                   anim, level, false, 0, "", 0);
+    }
+    printf("STATUS:%s\r\n", msg);
+    fflush(stdout);
+}
+
+esp_err_t selftest_mic_speaker_loopback(uint32_t duration_sec)
+{
+    if (duration_sec == 0) duration_sec = 3;
+    const uint32_t sample_rate = 16000;
+    const uint32_t total_samples = duration_sec * sample_rate;
+    const size_t buf_bytes = total_samples * sizeof(int16_t);
+    const float hpf_alpha = 0.96586f;
+    extern board_display_t *g_disp;
+    (void)g_disp;
+
+    ESP_LOGI(TAG_ST, "=== Loopback Parrot Test (%u s) ===", (unsigned)duration_sec);
+    printf("ECHO_START\r\n");
+    fflush(stdout);
+
+    int16_t *buf = (int16_t *)heap_caps_malloc(buf_bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!buf) {
+        buf = (int16_t *)malloc(buf_bytes);
+    }
+    if (!buf) {
+        ESP_LOGE(TAG_ST, "Failed to allocate %zu bytes for loopback", buf_bytes);
+        printf("ECHO_ERR no_mem\r\n");
+        return ESP_ERR_NO_MEM;
+    }
+
+    board_audio_t *audio = board_audio_init();
+    if (!audio) {
+        free(buf);
+        return ESP_FAIL;
+    }
+
+    // 1. COUNTDOWN BEFORE RECORDING (3, 2, 1)
+    for (int cd = 3; cd >= 1; cd--) {
+        char msg[20];
+        snprintf(msg, sizeof(msg), "RECORD IN %d", cd);
+        parrot_status(AI_LISTENING, msg, false, 0.0f);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+
+    esp_err_t err = board_audio_mic_start(audio);
+    if (err != ESP_OK) {
+        printf("ECHO_ERR mic_start %d\r\n", err);
+        parrot_status(AI_IDLE, "MIC ERROR", false, 0.0f);
         free(buf);
         return err;
     }
@@ -342,13 +413,24 @@ esp_err_t selftest_mic_speaker_loopback(uint32_t duration_sec)
 
     ESP_LOGI(TAG_ST, "🎤 RECORDING NOW! Speak into INMP441 mic (%u seconds)...", (unsigned)duration_sec);
 
+    // 2. RECORDING (3 seconds, display: RECORDING 3 -> RECORDING 2 -> RECORDING 1)
     int32_t raw_chunk[128];
     float prev_x = 0.0f, prev_y = 0.0f;
     uint32_t captured = 0;
     int32_t peak = 0;
     int64_t sum_sq = 0;
+    int current_rec_sec = -1;
 
     while (captured < total_samples) {
+        int rem_rec_sec = (int)((total_samples - captured + sample_rate - 1) / sample_rate);
+        if (rem_rec_sec < 1) rem_rec_sec = 1;
+        if (rem_rec_sec != current_rec_sec) {
+            current_rec_sec = rem_rec_sec;
+            char msg[20];
+            snprintf(msg, sizeof(msg), "RECORDING %d", current_rec_sec);
+            parrot_status(AI_LISTENING, msg, true, 1.0f);
+        }
+
         size_t bytes_read = 0;
         err = board_audio_read(audio, raw_chunk, sizeof(raw_chunk), &bytes_read, pdMS_TO_TICKS(500));
         if (err == ESP_OK && bytes_read > 0) {
@@ -378,16 +460,35 @@ esp_err_t selftest_mic_speaker_loopback(uint32_t duration_sec)
     float rms = (captured > 0) ? sqrtf((float)sum_sq / captured) : 0.0f;
     ESP_LOGI(TAG_ST, "🎤 Recording done! Captured %u samples (RMS: %.0f, Peak: %d)", (unsigned)captured, rms, (int)peak);
 
-    // Playback through speaker (MAX98357A)
+    // 3. COUNTDOWN BEFORE SPEAKING (3, 2, 1)
+    for (int cd = 3; cd >= 1; cd--) {
+        char msg[20];
+        snprintf(msg, sizeof(msg), "SPEAK IN %d", cd);
+        parrot_status(AI_ANSWERING, msg, false, 0.0f);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+
+    // 4. PLAYBACK THROUGH SPEAKER (3 seconds, display: SPEAKING 3 -> SPEAKING 2 -> SPEAKING 1)
     ESP_LOGI(TAG_ST, "🔊 PLAYING BACK recorded audio through speaker...");
+    audio_player_init();
     audio_player_start(sample_rate);
 
     const size_t chunk_bytes = 512;
     size_t offset = 0;
     const uint8_t *pcm_bytes = (const uint8_t *)buf;
     size_t total_bytes = captured * sizeof(int16_t);
+    int current_spk_sec = -1;
 
     while (offset < total_bytes) {
+        int rem_spk_sec = (int)(((total_bytes - offset) / 2 + sample_rate - 1) / sample_rate);
+        if (rem_spk_sec < 1) rem_spk_sec = 1;
+        if (rem_spk_sec != current_spk_sec) {
+            current_spk_sec = rem_spk_sec;
+            char msg[20];
+            snprintf(msg, sizeof(msg), "SPEAKING %d", current_spk_sec);
+            parrot_status(AI_ANSWERING, msg, true, 0.0f);
+        }
+
         size_t n = (total_bytes - offset < chunk_bytes) ? (total_bytes - offset) : chunk_bytes;
         while (!audio_player_submit_pcm(pcm_bytes + offset, n)) {
             vTaskDelay(pdMS_TO_TICKS(10));
@@ -396,12 +497,17 @@ esp_err_t selftest_mic_speaker_loopback(uint32_t duration_sec)
     }
 
     audio_player_wait_empty(5000);
-    vTaskDelay(pdMS_TO_TICKS(500));
+    vTaskDelay(pdMS_TO_TICKS(300));
     audio_player_stop();
     free(buf);
 
+    // 5. FINISHED -> READY
     ESP_LOGI(TAG_ST, "🔊 Loopback playback complete!");
-    printf("ECHO_DONE\n");
+    if (g_disp) {
+        board_display_draw_face(g_disp, FACE_HAPPY, BLINK_OPEN, 0, 0, 0);
+    }
+    parrot_status(AI_IDLE, "RBOT READY", false, 0.0f);
+    printf("ECHO_DONE\r\n");
     fflush(stdout);
     return ESP_OK;
 }

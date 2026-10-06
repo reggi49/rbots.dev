@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <fcntl.h>
 #include <math.h>
 #include "sdkconfig.h"
 #include "freertos/FreeRTOS.h"
@@ -15,6 +16,10 @@
 #include "esp_wifi.h" // [1.1.43] For WiFi shutdown before audio
 #include "driver/uart.h"
 #include "driver/gpio.h"
+#include "driver/usb_serial_jtag.h"
+#include "driver/usb_serial_jtag_vfs.h"
+#include "driver/uart_vfs.h"
+#include "esp_rom_sys.h"
 #include "board_pins.h"
 
 // Modules
@@ -37,7 +42,7 @@
 #define TAG_FEATURE "FEATURE"
 
 // --- Global Handles ---
-static board_display_t *g_disp = NULL;
+board_display_t *g_disp = NULL;
 static board_network_t *g_net = NULL;
 static board_audio_t *g_audio = NULL;
 static board_power_t *g_power = NULL;
@@ -184,8 +189,26 @@ static void board_set_net_state_internal(net_state_t state) {
 
 static void configure_console_for_binary_dump(void) {
     setvbuf(stdout, NULL, _IONBF, 0);
-#if !defined(CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG)
-    uart_set_baudrate(UART_NUM_0, 921600);
+#if CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG
+    usb_serial_jtag_driver_config_t jtag_config = {
+        .rx_buffer_size = 1024,
+        .tx_buffer_size = 131072,  // 128 KB buffer untuk streaming audio (32 KB/s * 4s = 128KB)
+    };
+    esp_err_t err = usb_serial_jtag_driver_install(&jtag_config);
+    if (err == ESP_OK) {
+        usb_serial_jtag_vfs_use_driver();
+        usb_serial_jtag_vfs_set_rx_line_endings(ESP_LINE_ENDINGS_CRLF);
+        usb_serial_jtag_vfs_set_tx_line_endings(ESP_LINE_ENDINGS_CRLF);
+    }
+#else
+    // Console on UART0 (board's CH343 USB-UART "COM" port). Install the driver so
+    // stdin (fgets in cli_task) blocks and receives commands like ECHO.
+    if (!uart_is_driver_installed(UART_NUM_0)) {
+        uart_driver_install(UART_NUM_0, 1024, 1024, 0, NULL, 0);
+    }
+    uart_vfs_dev_use_driver(UART_NUM_0);
+    uart_vfs_dev_port_set_rx_line_endings(UART_NUM_0, ESP_LINE_ENDINGS_CRLF);
+    uart_vfs_dev_port_set_tx_line_endings(UART_NUM_0, ESP_LINE_ENDINGS_CRLF);
 #endif
 }
 
@@ -322,9 +345,8 @@ static void debug_capture_audio_to_ram(void) {
         err = board_audio_read(g_audio, temp, sizeof(temp), &bytes_read, pdMS_TO_TICKS(1000));
         
         if (err == ESP_OK && bytes_read > 0) {
-            size_t samples = bytes_read / 4;  // 32-bit samples (mono)
+            size_t samples = bytes_read / sizeof(int32_t);  // 32-bit mono samples
             // INMP441: 24-bit audio in 32-bit container [MSB:LSB = bits 31:8]
-            // Mono mode already outputs LEFT channel only
             for (size_t i = 0; i < samples && total < target_samples; i++) {
                 // INMP441 outputs 24-bit audio in 32-bit container (bits [31:8])
                 // Step 1: Extract 24-bit data from bits [31:8]
@@ -961,6 +983,10 @@ static void face_anim_tick(uint32_t now_ticks)
 
 static void cli_task(void *arg) {
     char line[64];
+
+    printf("\r\n=== RBOT READY FOR COMMANDS ===\r\n");
+    fflush(stdout);
+
     while (1) {
         if (fgets(line, sizeof(line), stdin) != NULL) {
             char *p = line;
@@ -970,35 +996,16 @@ static void cli_task(void *arg) {
                 continue;
             }
 
-            if (strstr(line, "CMD_RECORD") || strstr(line, "RECORD") || strstr(line, "record") || strstr(line, "REC") || strstr(line, "rec") || *p == 'r' || *p == 'R') {
-                if (g_disp) {
-                    board_display_draw_overlay(g_disp, AI_LISTENING, "RECORDING 5S", WIFI_OFF,
-                                               NET_UNKNOWN, BAT_FULL, false, 0.0f,
-                                               false, 0, "", 0);
-                }
-                selftest_mic_stream(5);
-                if (g_disp) {
-                    board_display_draw_overlay(g_disp, AI_IDLE, "RBOT READY", WIFI_OFF,
-                                               NET_UNKNOWN, BAT_FULL, false, 0.0f,
-                                               false, 0, "", 0);
-                }
+            if (strstr(line, "PING") || strstr(line, "ping")) {
+                printf("PONG\r\n");
+                fflush(stdout);
             } else if (strstr(line, "ECHO") || strstr(line, "echo") || strstr(line, "PARROT") || strstr(line, "parrot") || *p == 'e' || *p == 'E') {
                 ESP_LOGI("CLI", "Command received: Mic -> Speaker Loopback (Parrot Test)");
-                if (g_disp) {
-                    board_display_draw_overlay(g_disp, AI_LISTENING, "SPEAK NOW (3S)", WIFI_OFF,
-                                               NET_UNKNOWN, BAT_FULL, false, 0.0f,
-                                               false, 0, "", 0);
-                }
                 selftest_mic_speaker_loopback(3);
-                if (g_disp) {
-                    board_display_draw_overlay(g_disp, AI_IDLE, "RBOT READY", WIFI_OFF,
-                                               NET_UNKNOWN, BAT_FULL, false, 0.0f,
-                                               false, 0, "", 0);
-                }
             } else if (strstr(line, "PLAY") || strstr(line, "play") || strstr(line, "VOICE") || strstr(line, "voice") || *p == 'p' || *p == 'P') {
                 ESP_LOGI("CLI", "Command received: PLAY human voice on speaker (MAX98357A)");
                 if (g_disp) {
-                    board_display_draw_overlay(g_disp, AI_THINKING, "PLAYING VOICE", WIFI_OFF,
+                    board_display_draw_overlay(g_disp, AI_ANSWERING, "RBOT SPEAKING", WIFI_OFF,
                                                NET_UNKNOWN, BAT_FULL, false, 0.0f,
                                                false, 0, "", 0);
                 }
@@ -1008,16 +1015,70 @@ static void cli_task(void *arg) {
                                                NET_UNKNOWN, BAT_FULL, false, 0.0f,
                                                false, 0, "", 0);
                 }
-                printf("PLAY_OK\n");
+                printf("PLAY_OK\r\n");
                 fflush(stdout);
-            } else if (strstr(line, "PING") || strstr(line, "ping")) {
-                printf("PONG\n");
+            } else if (strstr(line, "TFT") || strstr(line, "tft") || strstr(line, "COLOR") || strstr(line, "color")) {
+                ESP_LOGI("CLI", "Command received: Run TFT Color Cycle Test");
+                selftest_tft_color_cycle();
+                if (g_disp) {
+                    board_display_clear(g_disp);
+                    board_display_draw_face(g_disp, FACE_HAPPY, BLINK_OPEN, 0, 0, 0);
+                    board_display_draw_overlay(g_disp, AI_IDLE, "RBOT READY", WIFI_OFF,
+                                               NET_UNKNOWN, BAT_FULL, false, 0.0f,
+                                               false, 0, "", 0);
+                }
+                printf("TFT_DONE\r\n");
                 fflush(stdout);
-            } else if (strstr(line, "MIC") || strstr(line, "mic")) {
+            } else if (strstr(line, "TONE") || strstr(line, "tone")) {
+                ESP_LOGI("CLI", "Command received: Run 1kHz Tone");
+                if (g_disp) {
+                    board_display_draw_overlay(g_disp, AI_ANSWERING, "RBOT SPEAKING", WIFI_OFF,
+                                               NET_UNKNOWN, BAT_FULL, false, 0.0f,
+                                               false, 0, "", 0);
+                }
+                selftest_speaker_tone();
+                if (g_disp) {
+                    board_display_draw_overlay(g_disp, AI_IDLE, "RBOT READY", WIFI_OFF,
+                                               NET_UNKNOWN, BAT_FULL, false, 0.0f,
+                                               false, 0, "", 0);
+                }
+                printf("TONE_OK\r\n");
+                fflush(stdout);
+            } else if (strstr(line, "MIC") || strstr(line, "mic") || *p == 'm' || *p == 'M') {
                 ESP_LOGI("CLI", "Command received: Run Mic Level Test");
+                if (g_disp) {
+                    board_display_draw_overlay(g_disp, AI_LISTENING, "RBOT LISTENING", WIFI_OFF,
+                                               NET_UNKNOWN, BAT_FULL, false, 0.0f,
+                                               false, 0, "", 0);
+                }
                 selftest_mic_rms();
+                if (g_disp) {
+                    board_display_draw_overlay(g_disp, AI_IDLE, "RBOT READY", WIFI_OFF,
+                                               NET_UNKNOWN, BAT_FULL, false, 0.0f,
+                                               false, 0, "", 0);
+                }
+            } else if (strstr(line, "CMD_RECORD") || strstr(line, "RECORD") || strstr(line, "record") || *p == 'r' || *p == 'R') {
+                uint32_t dur = 3;
+                char *sp = strchr(line, ' ');
+                if (sp) {
+                    int parsed = atoi(sp + 1);
+                    if (parsed > 0 && parsed <= 30) dur = (uint32_t)parsed;
+                }
+                ESP_LOGI("CLI", "Command received: Stream mic to host (%u s)", (unsigned)dur);
+                if (g_disp) {
+                    board_display_draw_overlay(g_disp, AI_LISTENING, "RECORDING...", WIFI_OFF,
+                                               NET_UNKNOWN, BAT_FULL, true, 1.0f,
+                                               false, 0, "", 0);
+                }
+                selftest_mic_stream(dur);
+                if (g_disp) {
+                    board_display_draw_overlay(g_disp, AI_IDLE, "RBOT READY", WIFI_OFF,
+                                               NET_UNKNOWN, BAT_FULL, false, 0.0f,
+                                               false, 0, "", 0);
+                }
+
             } else {
-                printf("Commands available: PLAY (speaker audio), REC (stream 5s mic), ECHO (parrot loopback), MIC (level test), PING\n");
+                printf("Commands: PING, TONE, PLAY, ECHO, MIC, TFT, RECORD [sec]\r\n");
                 fflush(stdout);
             }
         }
@@ -1034,28 +1095,45 @@ void app_main(void)
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 #else
+    esp_rom_printf("\r\n=========================================\r\n");
+    esp_rom_printf("🚀 [APP_MAIN] RBOT APPLICATION STARTED!\r\n");
+    esp_rom_printf("=========================================\r\n");
     configure_console_for_binary_dump();
+    esp_rom_printf("[APP_MAIN] Console configured\r\n");
     ESP_LOGI("MAIN", "=== Audio Recorder Started ===");
     
-    // Initialize TFT display
+    // 1. Initialize TFT display FIRST so screen never stays blank white
+    esp_rom_printf("[APP_MAIN] Initializing TFT display...\r\n");
     ESP_LOGI("MAIN", "Initializing TFT display...");
     g_disp = board_display_init();
     if (!g_disp) {
+        esp_rom_printf("❌ [APP_MAIN] TFT init failed!\r\n");
         ESP_LOGE("MAIN", "TFT init failed!");
         return;
     }
+    esp_rom_printf("✅ [APP_MAIN] TFT display initialized\r\n");
     ESP_LOGI("MAIN", "TFT display initialized");
+
+    // Display Ready Screen on boot immediately
+    board_display_clear(g_disp);
+    board_display_draw_face(g_disp, FACE_HAPPY, BLINK_OPEN, 0, 0, 0);
+    board_display_draw_overlay(g_disp, AI_IDLE, "RBOT READY", WIFI_OFF,
+                               NET_UNKNOWN, BAT_FULL, false, 0.0f,
+                               false, 0, "", 0);
+    esp_rom_printf("✅ [APP_MAIN] TFT Ready Screen drawn!\r\n");
     
-    // ONLY initialize audio - disable everything else to save RAM
+    // 2. Initialize audio
+    esp_rom_printf("[APP_MAIN] Initializing audio...\r\n");
     g_audio = board_audio_init();
     if (!g_audio) {
+        esp_rom_printf("❌ [APP_MAIN] Audio init failed!\r\n");
         ESP_LOGE("MAIN", "Audio init failed!");
         return;
     }
-    
+    esp_rom_printf("✅ [APP_MAIN] Audio init OK\r\n");
     ESP_LOGI("MAIN", "Audio init OK");
     
-    // Setup Touch Sensor (GPIO 14)
+    // 3. Setup Touch Sensor (GPIO 14)
     gpio_config_t touch_cfg = {
         .pin_bit_mask = (1ULL << PIN_TOUCH),
         .mode = GPIO_MODE_INPUT,
@@ -1065,30 +1143,18 @@ void app_main(void)
     };
     gpio_config(&touch_cfg);
 
-    // Display Ready Screen on boot
-    board_display_clear(g_disp);
-    board_display_draw_face(g_disp, FACE_HAPPY, BLINK_OPEN, 0, 0, 0);
-    board_display_draw_overlay(g_disp, AI_IDLE, "RBOT READY", WIFI_OFF,
-                               NET_UNKNOWN, BAT_FULL, false, 0.0f,
-                               false, 0, "", 0);
+    // 4. Start CLI task for USB Serial commands
+    xTaskCreate(cli_task, "cli_task", 8192, NULL, 5, NULL);
+    esp_rom_printf("✅ [APP_MAIN] CLI task started!\r\n");
 
-    // Start CLI task for USB Serial commands immediately
-    xTaskCreate(cli_task, "cli_task", 10240, NULL, 5, NULL);
-
-    ESP_LOGI("MAIN", "\n*** Rbot ready! Send 'PLAY' via Serial or touch GPIO 14 to replay voice ***\n");
+    ESP_LOGI("MAIN", "\n*** Rbot ready! Send 'PLAY' or 'ECHO' via Serial or touch GPIO 14 for Parrot Loopback ***\n");
 
     int last_touch = 1;
     while(1) {
         int touch = gpio_get_level(PIN_TOUCH);
         if (touch == 0 && last_touch == 1) { // Pressed / touched
-            ESP_LOGI("MAIN", "Touch/Button on GPIO %d pressed! Playing voice...", PIN_TOUCH);
-            board_display_draw_overlay(g_disp, AI_THINKING, "PLAYING VOICE", WIFI_OFF,
-                                       NET_UNKNOWN, BAT_FULL, false, 0.0f,
-                                       false, 0, "", 0);
-            selftest_speaker_human_voice();
-            board_display_draw_overlay(g_disp, AI_IDLE, "RBOT READY", WIFI_OFF,
-                                       NET_UNKNOWN, BAT_FULL, false, 0.0f,
-                                       false, 0, "", 0);
+            ESP_LOGI("MAIN", "Touch/Button on GPIO %d pressed! Starting Parrot Loopback (3s mic -> speaker)...", PIN_TOUCH);
+            selftest_mic_speaker_loopback(3);
         }
         last_touch = touch;
 
