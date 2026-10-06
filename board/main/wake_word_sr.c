@@ -113,6 +113,7 @@ esp_err_t wake_word_sr_init(wake_word_detected_cb_t callback)
 
     afe_config->wakenet_init = true;
     afe_config->wakenet_model_name = s_active_model_name;
+    afe_config->wakenet_model_name_2 = NULL; // Explicitly DISABLE second wake model (Hi ESP toggle OFF)
     afe_config->wakenet_mode = DET_MODE_95; // High sensitivity (Aggressive, 95% target)
     afe_config->memory_alloc_mode = AFE_MEMORY_ALLOC_MORE_PSRAM;
     afe_config->afe_ringbuf_size = 50;
@@ -263,15 +264,24 @@ static void wake_word_task(void *arg)
 
         if (!s_listening) continue;
 
-        // Convert 32-bit INMP441 raw samples to 16-bit PCM and measure energy
+        // Convert 32-bit INMP441 raw samples to 16-bit PCM with DC-blocking HPF (fc ~ 80Hz)
+        static float prev_x = 0.0f, prev_y = 0.0f;
+        const float hpf_alpha = 0.96586f;
         int64_t chunk_sum_sq = 0;
         int16_t chunk_peak = 0;
         for (int i = 0; i < feed_chunksize; i++) {
             int16_t s = inmp441_to_pcm16(raw_buf[i]);
-            pcm_buf[i] = s;
-            int16_t abs_s = s < 0 ? -s : s;
+            float x = (float)s;
+            float y = hpf_alpha * (prev_y + x - prev_x);
+            prev_x = x;
+            prev_y = y;
+            int32_t s_clean = (int32_t)y;
+            if (s_clean > 32767)  s_clean = 32767;
+            if (s_clean < -32768) s_clean = -32768;
+            pcm_buf[i] = (int16_t)s_clean;
+            int16_t abs_s = (s_clean < 0) ? -s_clean : s_clean;
             if (abs_s > chunk_peak) chunk_peak = abs_s;
-            chunk_sum_sq += (int64_t)s * s;
+            chunk_sum_sq += (int64_t)s_clean * s_clean;
         }
         float chunk_rms = sqrtf((float)chunk_sum_sq / feed_chunksize);
 
