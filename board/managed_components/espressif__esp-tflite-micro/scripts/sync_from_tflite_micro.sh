@@ -57,4 +57,10 @@ mkdir -p third_party/
 mkdir -p signal/
 /bin/cp -r "${TEMP_DIR}"/tflm-out/signal/* signal/
 
+# upstream trees occasionally carry stray executable bits on sources, which
+# trips pre-commit's check-executables-have-shebangs on every sync MR
+find tensorflow third_party signal -type f \
+    \( -name '*.h' -o -name '*.cc' -o -name '*.c' -o -name '*.hpp' \) \
+    -exec chmod -x {} +
+
 rm -rf "${TEMP_DIR}"

@@ -141,7 +141,7 @@ static TfLiteStatus Prepare(TfLiteContext* context, TfLiteNode* node) {
                               };
     data_dims_t filter_dims = {
                                 .width = filter_width, .height = filter_height,
-                                .channels = 0, .extra = 0
+                                .channels = filter->dims->data[3], .extra = 0
                               };
     conv_params_t conv_params = {
                                   .in_offset = 0, .out_offset = 0,
@@ -212,7 +212,10 @@ inline void EvalQuantizedPerChannel(
     TFLITE_DCHECK_EQ(filter_shape.DimensionsCount(), 4);
     TFLITE_DCHECK_EQ(output_shape.DimensionsCount(), 4);
     const int batch_size = MatchingDim(input_shape, 0, output_shape, 0);
-    const int input_depth = MatchingDim(input_shape, 3, filter_shape, 3);
+    /* No MatchingDim here: grouped conv has filter_ch < input_ch, and esp-nn
+     * >=1.2.3 falls back to ansi for it internally (filter channels are passed
+     * via filter_dims.channels below). */
+    const int input_depth = input_shape.Dims(3);
     const int output_depth = MatchingDim(filter_shape, 0, output_shape, 3);
 
     if (tflite::micro::GetTensorData<int8_t>(bias)) {
@@ -238,7 +241,7 @@ inline void EvalQuantizedPerChannel(
                               };
     data_dims_t filter_dims = {
                                 .width = filter_width, .height = filter_height,
-                                .channels = 0, .extra = 0
+                                .channels = filter->dims->data[3], .extra = 0
                               };
     conv_params_t conv_params = {
                                   .in_offset = input_offset, .out_offset = output_offset,

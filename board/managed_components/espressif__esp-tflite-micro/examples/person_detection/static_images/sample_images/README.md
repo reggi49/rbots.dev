@@ -1,7 +1,10 @@
 # About Images
 
   - The images embedded here are 96x96 greyscale images.
-  - These can be viewed at https://rawpixels.net
+  - To view an image, convert it to BMP using ffmpeg:
+    ```
+    ffmpeg -f rawvideo -pixel_format gray -video_size 96x96 -i image0 image0.bmp
+    ```
 
 ## Image descriptions:
 

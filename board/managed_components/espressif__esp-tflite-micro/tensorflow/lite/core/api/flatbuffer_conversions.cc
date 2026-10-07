@@ -487,6 +487,10 @@ TfLiteStatus ParseOpDataTfLite(const Operator* op, BuiltinOperator op_type,
       return ParseRsqrt(op, error_reporter, allocator, builtin_data);
     }
 
+    case BuiltinOperator_SELECT: {
+      return ParseSelect(op, error_reporter, allocator, builtin_data);
+    }
+
     case BuiltinOperator_SELECT_V2: {
       return ParseSelectV2(op, error_reporter, allocator, builtin_data);
     }
@@ -1004,7 +1008,6 @@ TfLiteStatus ParseOpDataTfLite(const Operator* op, BuiltinOperator op_type,
     case BuiltinOperator_RELU_N1_TO_1:
     case BuiltinOperator_RELU_0_TO_1:
     case BuiltinOperator_SCATTER_ND:
-    case BuiltinOperator_SELECT:
     case BuiltinOperator_SLICE:
     case BuiltinOperator_TILE:
     case BuiltinOperator_TOPK_V2:
@@ -1094,6 +1097,15 @@ TfLiteStatus ConvertTensorType(TensorType tensor_type, TfLiteType* type,
       return kTfLiteOk;
     case TensorType_INT2:
       *type = kTfLiteInt2;
+      return kTfLiteOk;
+    case TensorType_UINT4:
+      *type = kTfLiteUInt4;
+      return kTfLiteOk;
+    case TensorType_FLOAT8_E4M3FN:
+      *type = kTfLiteFloat8E4M3FN;
+      return kTfLiteOk;
+    case TensorType_FLOAT8_E5M2:
+      *type = kTfLiteFloat8E5M2;
       return kTfLiteOk;
     default:
       *type = kTfLiteNoType;
@@ -1876,9 +1888,7 @@ TfLiteStatus ParseMul(const Operator* op, ErrorReporter* error_reporter,
     params->activation =
         ConvertActivation(schema_params->fused_activation_function());
   } else {
-    // TODO(b/157480169): We should either return kTfLiteError or fill in some
-    // reasonable defaults in the params struct. We are not doing so until we
-    // better understand the ramifications of changing the legacy behavior.
+    // Default activation is none.
   }
 
   *builtin_data = params.release();
@@ -2320,34 +2330,42 @@ TfLiteStatus ParseStablehloGather(const Operator* op,
       op->builtin_options_2_as_StablehloGatherOptions();
 
   if (schema_params != nullptr) {
-    TF_LITE_ENSURE_STATUS(FlatBufferIntVectorToArray<int64_t>(
-        /*max_size_of_buffer=*/schema_params->offset_dims()->size() *
-            sizeof(int64_t),
-        /*flat_vector=*/schema_params->offset_dims(),
-        /*buffer=*/params->offset_dims, /*error_reporter=*/error_reporter,
-        /*op_name=*/"stablehlo_gather"));
-    params->num_offset_dims = schema_params->offset_dims()->size();
+    if (schema_params->offset_dims()) {
+      TF_LITE_ENSURE_STATUS(FlatBufferIntVectorToArray<int64_t>(
+          /*max_size_of_buffer=*/schema_params->offset_dims()->size() *
+              sizeof(int64_t),
+          /*flat_vector=*/schema_params->offset_dims(),
+          /*buffer=*/params->offset_dims, /*error_reporter=*/error_reporter,
+          /*op_name=*/"stablehlo_gather"));
+      params->num_offset_dims = schema_params->offset_dims()->size();
+    }
 
-    TF_LITE_ENSURE_STATUS(FlatBufferIntVectorToArray<int64_t>(
-        schema_params->collapsed_slice_dims()->size() * sizeof(int64_t),
-        schema_params->collapsed_slice_dims(), params->collapsed_slice_dims,
-        error_reporter, "stablehlo_gather"));
-    params->num_collapsed_slice_dims =
-        schema_params->collapsed_slice_dims()->size();
+    if (schema_params->collapsed_slice_dims()) {
+      TF_LITE_ENSURE_STATUS(FlatBufferIntVectorToArray<int64_t>(
+          schema_params->collapsed_slice_dims()->size() * sizeof(int64_t),
+          schema_params->collapsed_slice_dims(), params->collapsed_slice_dims,
+          error_reporter, "stablehlo_gather"));
+      params->num_collapsed_slice_dims =
+          schema_params->collapsed_slice_dims()->size();
+    }
 
-    TF_LITE_ENSURE_STATUS(FlatBufferIntVectorToArray<int64_t>(
-        schema_params->start_index_map()->size() * sizeof(int64_t),
-        schema_params->start_index_map(), params->start_index_map,
-        error_reporter, "stablehlo_gather"));
-    params->num_start_index_map = schema_params->start_index_map()->size();
+    if (schema_params->start_index_map()) {
+      TF_LITE_ENSURE_STATUS(FlatBufferIntVectorToArray<int64_t>(
+          schema_params->start_index_map()->size() * sizeof(int64_t),
+          schema_params->start_index_map(), params->start_index_map,
+          error_reporter, "stablehlo_gather"));
+      params->num_start_index_map = schema_params->start_index_map()->size();
+    }
 
     params->index_vector_dim = schema_params->index_vector_dim();
 
-    TF_LITE_ENSURE_STATUS(FlatBufferIntVectorToArray<int64_t>(
-        schema_params->slice_sizes()->size() * sizeof(int64_t),
-        schema_params->slice_sizes(), params->slice_sizes, error_reporter,
-        "stablehlo_gather"));
-    params->num_slice_sizes = schema_params->slice_sizes()->size();
+    if (schema_params->slice_sizes()) {
+      TF_LITE_ENSURE_STATUS(FlatBufferIntVectorToArray<int64_t>(
+          schema_params->slice_sizes()->size() * sizeof(int64_t),
+          schema_params->slice_sizes(), params->slice_sizes, error_reporter,
+          "stablehlo_gather"));
+      params->num_slice_sizes = schema_params->slice_sizes()->size();
+    }
 
     params->indices_are_sorted = schema_params->indices_are_sorted();
   } else {
@@ -2424,6 +2442,18 @@ TfLiteStatus ParseStablehloComposite(const Operator* op,
   const StableHLOCompositeOptions* schema_params =
       op->builtin_options_2_as_StableHLOCompositeOptions();
   if (schema_params) {
+    if (schema_params->name() == nullptr) {
+      TF_LITE_REPORT_ERROR(
+          error_reporter,
+          "'stablehlo.composite' missing required option 'name'.");
+      return kTfLiteError;
+    }
+    if (schema_params->composite_attributes() == nullptr) {
+      TF_LITE_REPORT_ERROR(error_reporter,
+                           "'stablehlo.composite' missing required option "
+                           "'composite_attributes'.");
+      return kTfLiteError;
+    }
     params->name = schema_params->name()->c_str();
     params->version = schema_params->version();
     params->subgraph_index = schema_params->decomposition_subgraph_index();
@@ -2506,6 +2536,14 @@ TfLiteStatus ParseRound(const Operator*, ErrorReporter*, BuiltinDataAllocator*,
 // selective registration for the OpResolver implementation in micro.
 TfLiteStatus ParseRsqrt(const Operator*, ErrorReporter*, BuiltinDataAllocator*,
                         void**) {
+  return kTfLiteOk;
+}
+
+// We have this parse function instead of directly returning kTfLiteOk from the
+// switch-case in ParseOpData because this function is used as part of the
+// selective registration for the OpResolver implementation in micro.
+TfLiteStatus ParseSelect(const Operator*, ErrorReporter*, BuiltinDataAllocator*,
+                         void**) {
   return kTfLiteOk;
 }
 

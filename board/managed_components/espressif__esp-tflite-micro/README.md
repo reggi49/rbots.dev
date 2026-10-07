@@ -11,12 +11,32 @@
 | -----------   |  --------- |
 | Examples Build | [![CI](https://github.com/espressif/esp-tflite-micro/actions/workflows/ci.yml/badge.svg)](https://github.com/espressif/esp-tflite-micro/actions/workflows/ci.yml)
 
+### Quick Flash (Board-Specific)
+
+| Board | Example | Flash |
+|-------|---------|-------|
+| <img src="https://raw.githubusercontent.com/espressif/esp-who/master/docs/_static/get-started/ESP32-S3-EYE-isometric.png" alt="ESP32-S3-EYE" width="120"><br>ESP32-S3-EYE | Person Detection | [Flash Now](https://espressif.github.io/esp-launchpad/minimal-launchpad/?flashConfigURL=https://espressif.github.io/esp-tflite-micro/person_detection/esp32_s3_eye/launchpad.toml) |
+
+### Try All Examples
+
+<a href="https://espressif.github.io/esp-launchpad/?flashConfigURL=https://espressif.github.io/esp-tflite-micro/launchpad.toml">
+    <img alt="Try it with ESP Launchpad" src="https://espressif.github.io/esp-launchpad/assets/try_with_launchpad.png" width="250" height="70">
+</a>
+
 ## How to Install
 
 ### ESP-IDF Support Policy
 We keep track with the ESP-IDF's support period policy mentioned [here](https://github.com/espressif/esp-idf?tab=readme-ov-file#esp-idf-release-support-schedule).
 
-Currently ESP-IDF versions `release/v4.4` and above are supported by this project.
+| ESP-IDF version | Supported |
+| --------------- | :-------: |
+| `release/v6.0`  | ✅ |
+| `release/v5.5`  | ✅ |
+| `release/v5.4`  | ✅ |
+| `release/v5.3`  | ✅ |
+| `release/v5.2`  | ✅ (not covered by CI) |
+| `release/v5.1`  | ✅ |
+| `release/v5.0` and below | ❌ (end of life) |
 
 ### Install the ESP IDF
 

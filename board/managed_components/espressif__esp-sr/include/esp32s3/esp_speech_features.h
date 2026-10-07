@@ -8,6 +8,9 @@
 #define M_2PI 6.283185307179586476925286766559005
 #endif
 
+#define SR_MAX(x, y) ((x) > (y) ? (x) : (y))
+#define SR_MIN(x, y) ((x) < (y) ? (x) : (y))
+
 typedef struct {
     float *coeff;
     int *bank_pos;
@@ -20,7 +23,7 @@ void esp_mfcc_free(void *ptr);
 
 /**
  * @brief Initialize FFT table
- * @warning For ESP-PLATFORM, use esp-dsp fft
+ * @warning For ESP-PLATFORM, use dl_fft
  *          For Other platform, use kiss fft
  *
  * @param nfft  The input samples number
@@ -30,7 +33,7 @@ void *esp_fft_init(int nfft);
 
 /**
  * @brief Free FFT table
- * @warning For ESP-PLATFORM, use esp-dsp fft
+ * @warning For ESP-PLATFORM, use dl_fft
  *          For Other platform, use kiss fft
  *
  * @param fft_table  The fft table initialized by esp_fft_init
@@ -48,7 +51,7 @@ float *esp_win_func_init(char *win_type, float *window_data, int frame_length);
 
 float *esp_fftr(float *x, int nfft, void *fft_table);
 
-float *esp_spectrum_step(float *x, int nfft, bool use_power, void *fft_table);
+float *esp_spectrum_step(float *x, int nfft, bool use_power, void *fft_handle);
 
 void esp_audio_short_to_float(short *samples, float *x, int len, int remove_dc);
 

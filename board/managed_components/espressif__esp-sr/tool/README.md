@@ -60,8 +60,8 @@ ESP Speech Recognition -> Add speech commands
 char *new_commands_str="hcLb WkLD,hi fST;TkN nN jc LiT;TkN eF jc LiT;"  //
 char err_id[256];
 multinet->reset(model_data, new_commands_str, err_id);
-// hello world,hi ESP -> commond id=0
-// turn on the light -> commond id=1
-// turn off the light -> commond id=2
+// hello world,hi ESP -> command id=0
+// turn on the light -> command id=1
+// turn off the light -> command id=2
 ```
 

@@ -97,7 +97,6 @@ set(lib_srcs
           "${tflite_dir}/kernels/internal/tensor_utils.cc"
           "${tflite_dir}/kernels/internal/tensor_ctypes.cc"
           "${tflite_dir}/kernels/internal/reference/portable_tensor_utils.cc"
-          "${tflite_dir}/kernels/internal/reference/comparisons.cc"
           "${compiler_mlir_dir}/lite/core/api/error_reporter.cc"
           "${compiler_mlir_dir}/lite/schema/schema_utils.cc")
 
@@ -144,7 +143,7 @@ target_compile_options(${COMPONENT_LIB} PRIVATE ${common_flags} -fmessage-length
 target_compile_options(${COMPONENT_LIB} PRIVATE $<$<COMPILE_LANGUAGE:CXX>:
                                       ${common_flags} -std=c++11 -fno-rtti -fno-exceptions
                                       -fno-threadsafe-statics -Werror -Wno-return-type
-                                      -Wno-strict-aliasing -std=gnu++14 >)
+                                      -Wno-strict-aliasing -std=gnu++17 >)
 
 # avoid issue of compiler internal error caused in `depthwise_conv_flaot.h
 set_source_files_properties(${tfmicro_kernels_dir}/esp_nn/depthwise_conv.cc

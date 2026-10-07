@@ -33,9 +33,8 @@ typedef struct afe_fetch_result_t {
     int16_t *vad_cache; // the cache data of vad. It's only valid when vad_cache_size > 0. It is used to complete the
                         // audio that was truncated.
     int vad_cache_size; // the size of vad_cache. The unit is byte.
-    float data_volume;  // the volume of input audio, the unit is decibel(dB). This value is calculated before agc.
-                        // (note: invalid in vc). if enable wakenet, the window length is the receptive fields of
-                        // wakenet(about 1.5s), otherwise is the frame length.
+    float data_volume;  // VAD input mean square energy in dBFS, calculated before AGC. With VadNet
+                        // enabled, the window covers vad_min_speech_ms; otherwise, one fetch frame is used.
     wakenet_state_t wakeup_state; // the value is wakenet_state_t
     int wake_word_index;          // if the wake word is detected. It will store the wake word index which start from 1.
     int wakenet_model_index; // if there are multiple wakenets, this value identifies which model be wakes up. Index
@@ -46,11 +45,12 @@ typedef struct afe_fetch_result_t {
     int ret_value;           // the return state of fetch function
     int16_t *raw_data;       // the multi-channel output data of audio.
     int raw_data_channels;   // the channel number of raw data
+    float ringbuff_free_pct; // the percent of ringbuff free size. if the value is larger than 0.5, it means the ringbuff is busy. 
     void *reserved;          // reserved for future use
 } afe_fetch_result_t;
 
 /**
- * @brief Function to initialze a AFE_SR instance
+ * @brief Function to initialize a AFE_SR instance
  *
  * @param afe_config        The config of AFE_SR
  * @returns Handle to the AFE_SR data
@@ -131,14 +131,61 @@ typedef afe_fetch_result_t *(*esp_afe_sr_iface_op_fetch_with_delay_t)(esp_afe_sr
 typedef int (*esp_afe_sr_iface_op_reset_buffer_t)(esp_afe_sr_data_t *afe);
 
 /**
- * @brief Initial wakenet and wake words coefficient, or reset wakenet and wake words coefficient
- *        when wakenet has been initialized. It's only support wakenet 1 now.
- *
- * @param afe                The AFE_SR object to query
- * @param wakenet_word       The wakenet word, should be DEFAULT_WAKE_WORD or EXTRA_WAKE_WORD
+ * @brief Set wakenet detection threshold 
+ * 
+ * @param afe           The AFE_SR object to query
+ * @param index         The wakenet index, just support 1: wakenet1 or  2: wakenet2
+ * @param threshold     The wakenet detection threshold, the value is between 0.4 and 0.9999.
  * @return             -1: fail, 1: success
  */
-typedef int (*esp_afe_sr_iface_op_set_wakenet_t)(esp_afe_sr_data_t *afe, char *model_name);
+typedef int (*esp_afe_sr_iface_op_set_wakenet_threshold_t)(esp_afe_sr_data_t *afe, int index, float threshold);
+
+/**
+ * @brief Reset wakenet detection threshold to initial state
+ * 
+ * @param afe           The AFE_SR object to query
+ * @param index         The wakenet index, just support 1: wakenet1 or  2: wakenet2
+ * @return             -1: fail, 1: success
+ */
+typedef int (*esp_afe_sr_iface_op_reset_wakenet_threshold_t)(esp_afe_sr_data_t *afe, int index);
+
+/**
+ * @brief Set vadnet detection threshold
+ *
+ * @param afe           The AFE_SR object to query
+ * @param threshold     The vadnet detection threshold, the value is between 0.5 and 0.9999.
+ * @return             -1: fail, 1: success
+ */
+typedef int (*esp_afe_sr_iface_op_set_vadnet_threshold_t)(esp_afe_sr_data_t *afe, float threshold);
+
+/**
+ * @brief Get vadnet detection threshold
+ *
+ * @param afe           The AFE_SR object to query
+ * @return              The vadnet detection threshold, or -1 if vadnet is not initialized
+ */
+typedef float (*esp_afe_sr_iface_op_get_vadnet_threshold_t)(esp_afe_sr_data_t *afe);
+
+/**
+ * @brief Set vad energy threshold
+ *
+ * The energy of every input frame is averaged over a window covering
+ * vad_min_speech_ms. Speech is only reported once this average reaches the
+ * threshold while the vad model triggers as well.
+ *
+ * @param afe           The AFE_SR object to query
+ * @param threshold     The averaged frame energy threshold in dBFS, the value is between -100 and 0.
+ * @return             -1: fail, 1: success
+ */
+typedef int (*esp_afe_sr_iface_op_set_vad_energy_threshold_t)(esp_afe_sr_data_t *afe, float threshold);
+
+/**
+ * @brief Get vad energy threshold
+ *
+ * @param afe           The AFE_SR object to query
+ * @return              The averaged frame energy threshold in dBFS, or 1 if vadnet is not initialized
+ */
+typedef float (*esp_afe_sr_iface_op_get_vad_energy_threshold_t)(esp_afe_sr_data_t *afe);
 
 /**
  * @brief Reset one function/module/algorithm.
@@ -163,6 +210,15 @@ typedef int (*esp_afe_sr_iface_op_disable_func_t)(esp_afe_sr_data_t *afe);
  * @return             -1: fail, 0: disabled, 1: enabled
  */
 typedef int (*esp_afe_sr_iface_op_enable_func_t)(esp_afe_sr_data_t *afe);
+
+/**
+ * @brief Add a WakeNet model to the AFE_SR instance
+ *
+ * @param afe          The AFE_SR object to query
+ * @param model_name   The name of the WakeNet model to add
+ * @return             The number of WakeNet models after addition, or -1 on failure
+ */
+typedef int (*esp_afe_sr_iface_op_add_wakenet_func_t)(esp_afe_sr_data_t *afe, const char *model_name);
 
 /**
  * @brief Print all functions/modules/algorithms pipeline.
@@ -195,7 +251,12 @@ typedef struct {
     esp_afe_sr_iface_op_get_channel_num_t get_feed_channel_num;
     esp_afe_sr_iface_op_get_channel_num_t get_fetch_channel_num;
     esp_afe_sr_iface_op_get_samp_rate_t get_samp_rate;
-    esp_afe_sr_iface_op_set_wakenet_t set_wakenet;
+    esp_afe_sr_iface_op_set_wakenet_threshold_t set_wakenet_threshold;
+    esp_afe_sr_iface_op_reset_wakenet_threshold_t reset_wakenet_threshold;
+    esp_afe_sr_iface_op_set_vadnet_threshold_t set_vadnet_threshold;
+    esp_afe_sr_iface_op_get_vadnet_threshold_t get_vadnet_threshold;
+    esp_afe_sr_iface_op_set_vad_energy_threshold_t set_vad_energy_threshold;
+    esp_afe_sr_iface_op_get_vad_energy_threshold_t get_vad_energy_threshold;
     esp_afe_sr_iface_op_disable_func_t disable_wakenet;
     esp_afe_sr_iface_op_enable_func_t enable_wakenet;
     esp_afe_sr_iface_op_disable_func_t disable_aec;
@@ -209,6 +270,7 @@ typedef struct {
     esp_afe_sr_iface_op_enable_func_t enable_ns;
     esp_afe_sr_iface_op_disable_func_t disable_agc;
     esp_afe_sr_iface_op_enable_func_t enable_agc;
+    esp_afe_sr_iface_op_add_wakenet_func_t add_wakenet_model;
     esp_afe_sr_iface_op_print_pipeline_t print_pipeline;
     esp_afe_sr_iface_op_destroy_t destroy;
 } esp_afe_sr_iface_t;
@@ -216,7 +278,7 @@ typedef struct {
 // struct is used to store the AFE handle and data for the AFE task
 typedef struct {
     esp_afe_sr_data_t *afe_data;
-    esp_afe_sr_iface_t *afe_handle;
+    const esp_afe_sr_iface_t *afe_handle;
     TaskHandle_t feed_task;
     TaskHandle_t fetch_task;
 } afe_task_into_t;

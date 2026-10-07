@@ -255,7 +255,7 @@ TfLiteStatus BatchMatMulPrepare(TfLiteContext* context, TfLiteNode* node) {
   const RuntimeShape extended_rhs_shape =
       RuntimeShape::ExtendedShape(output_rank, GetTensorShape(rhs_data));
 
-  // Ensure any batch dimensions obey broacasting rules.
+  // Ensure any batch dimensions obey broadcasting rules.
   for (int i = 0; i < output_rank - 2; ++i) {
     const int lhs_dim = extended_lhs_shape.Dims(i);
     const int rhs_dim = extended_rhs_shape.Dims(i);
@@ -340,6 +340,45 @@ TfLiteStatus EvalInt16(TfLiteContext* context, const OpDataBatchMatmul& data,
   return kTfLiteOk;
 }
 
+void ReshapeToFlattenBatchDimsIfPossible(RuntimeShape* lhs_shape,
+                                         RuntimeShape* rhs_shape) {
+  // Compress BatchMatMul when third from last RHS dimension is one.
+  int32_t rhs_dims_count = rhs_shape->DimensionsCount();
+  int32_t lhs_dims_count = lhs_shape->DimensionsCount();
+
+  // Compress ops where rhs shape is [..., 1, X, Y] and lhs shape is
+  // [..., Q, R, S].
+  // After shape assignment, rhs shape represents
+  // [..., 1, lhs_rows, accum_depth] and lhs shape represents
+  // [..., batch, accum_depth, rhs_cols].
+  //
+  // When rhs has a batch dimension of 1, we can collapse the batch dimension
+  // of lhs into rhs_cols, treating [..., batch, accum_depth, rhs_cols] as
+  // [..., accum_depth, batch * rhs_cols].
+  //
+  // This works because whether adj_x is false (where orig_lhs is
+  // [batch, rhs_cols, accum_depth]) or adj_x is true (where orig_lhs is
+  // [batch, accum_depth, rhs_cols] but transposed in memory), the underlying
+  // buffer in memory has batch and rhs_cols as contiguous outer dimensions,
+  // which can be physically collapsed into batch * rhs_cols.
+  if (rhs_dims_count > 2 && lhs_dims_count > 2) {
+    int rhs_one = rhs_shape->DimsData()[rhs_dims_count - 3];
+    if (rhs_one == 1) {
+      int32_t* lhs_dims = lhs_shape->DimsData();
+      int32_t* rhs_dims = rhs_shape->DimsData();
+      RuntimeShape tmp_l(lhs_dims_count - 1, lhs_dims);
+      tmp_l.SetDim(lhs_dims_count - 3, lhs_dims[lhs_dims_count - 2]);
+      tmp_l.SetDim(lhs_dims_count - 2,
+                   lhs_dims[lhs_dims_count - 3] * lhs_dims[lhs_dims_count - 1]);
+      lhs_shape->ReplaceWith(tmp_l.DimensionsCount(), tmp_l.DimsData());
+      RuntimeShape tmp_r(rhs_dims_count - 1, rhs_shape->DimsData());
+      tmp_r.SetDim(rhs_dims_count - 3, rhs_dims[rhs_dims_count - 2]);
+      tmp_r.SetDim(rhs_dims_count - 2, rhs_dims[rhs_dims_count - 1]);
+      rhs_shape->ReplaceWith(tmp_r.DimensionsCount(), tmp_r.DimsData());
+    }
+  }
+}
+
 // Perform a batch matrix multiply on
 // LHS <..., A, B>  X  RHS<..., B, C>
 // where the leading dimensions of LHS and RHS obey broadcasting rules
@@ -363,31 +402,6 @@ TfLiteStatus BatchMatMulEval(TfLiteContext* context, TfLiteNode* node) {
   bool adj_y = op_context.params->adj_y;
   bool adj_x = op_context.params->adj_x;
 
-  // Compress BatchMatMul when third from last RHS dimension is one.
-  int32_t rhs_dims_count = orig_rhs_shape.DimensionsCount();
-  int32_t lhs_dims_count = orig_lhs_shape.DimensionsCount();
-  // Compress ops where rhs shape is [..., 1, X, Y] and lhs shape is
-  // [..., Q, R, S] which is equivalent to rhs: [..., X, Y] and
-  // lhs: [..., Q * R, S].
-  if (rhs_dims_count > 2 && lhs_dims_count > 2) {
-    int rhs_one = orig_rhs_shape.DimsData()[rhs_dims_count - 3];
-    if (rhs_one == 1) {
-      int32_t* lhs_dims = orig_lhs_shape.DimsData();
-      int32_t* rhs_dims = orig_rhs_shape.DimsData();
-      RuntimeShape tmp_l(lhs_dims_count - 1, lhs_dims);
-      tmp_l.SetDim(lhs_dims_count - 3,
-                   lhs_dims[lhs_dims_count - 3] * lhs_dims[lhs_dims_count - 2]);
-      tmp_l.SetDim(lhs_dims_count - 2, lhs_dims[lhs_dims_count - 1]);
-      orig_lhs_shape.ReplaceWith(tmp_l.DimensionsCount(), tmp_l.DimsData());
-      RuntimeShape tmp_r(rhs_dims_count - 1, orig_rhs_shape.DimsData());
-      tmp_r.SetDim(rhs_dims_count - 3, rhs_dims[rhs_dims_count - 2]);
-      tmp_r.SetDim(rhs_dims_count - 2, rhs_dims[rhs_dims_count - 1]);
-      orig_rhs_shape.ReplaceWith(tmp_r.DimensionsCount(), tmp_r.DimsData());
-      rhs_dims_count = orig_rhs_shape.DimensionsCount();
-      lhs_dims_count = orig_lhs_shape.DimensionsCount();
-    }
-  }
-
   TfLiteEvalTensor* rhs_tensor = adj_y ? const_cast<TfLiteEvalTensor*>(rhs)
                                        : op_data->rhs_transposed_tensor;
   TfLiteEvalTensor* lhs_tensor = adj_x ? op_data->lhs_transposed_tensor
@@ -409,6 +423,8 @@ TfLiteStatus BatchMatMulEval(TfLiteContext* context, TfLiteNode* node) {
       adj_y ? orig_rhs_shape : SwapRowColumnDims(orig_rhs_shape);
   RuntimeShape lhs_shape =
       adj_x ? orig_lhs_shape : SwapRowColumnDims(orig_lhs_shape);
+
+  ReshapeToFlattenBatchDimsIfPossible(&lhs_shape, &rhs_shape);
 
   switch (lhs->type) {
     case kTfLiteFloat32:
