@@ -52,6 +52,15 @@ typedef struct {
 
 static QueueHandle_t s_turn_queue = NULL;
 static volatile bool s_interaction_busy = false;
+static volatile bool s_session_abort_requested = false;
+
+static void rbot_signal_session_end(void)
+{
+    if (s_interaction_busy) {
+        s_session_abort_requested = true;
+        ESP_LOGI(TAG_STATE, "🛑 Manual session abort requested");
+    }
+}
 
 static void on_wake_word_detected(const char *word_name, int word_index)
 {
@@ -75,8 +84,7 @@ static void interaction_task(void *arg)
     while (1) {
         if (xQueueReceive(s_turn_queue, &req, portMAX_DELAY) == pdTRUE) {
             s_interaction_busy = true;
-            ESP_LOGI(TAG_STATE, "▶️ [INTERACTION] Starting conversational turn (trigger=%d, dur=%u s)",
-                     (int)req.trigger, (unsigned)req.duration_sec);
+            s_session_abort_requested = false;
 
             // 1. Suspend wake word listening immediately (strict half-duplex)
             wake_word_sr_suspend();
@@ -87,28 +95,82 @@ static void interaction_task(void *arg)
                 vTaskDelay(pdMS_TO_TICKS(100));
             }
 
-            // 3. Perform conversational turn
-            voice_chat_trigger_turn(req.duration_sec, req.trigger);
+            // 3. Generate unique Session ID
+            char session_id[32];
+            snprintf(session_id, sizeof(session_id), "sess_%08lx", (unsigned long)esp_random());
+            int64_t session_start_ms = esp_timer_get_time() / 1000;
+            int turn_index = 0;
+            bool session_active = true;
 
-            // 4. Cooldown (500 ms)
-            vTaskDelay(pdMS_TO_TICKS(500));
+            ESP_LOGI(TAG_STATE, "🌟 [SESSION START] Session '%s' opened (trigger=%d)",
+                     session_id, (int)req.trigger);
 
-            // 5. Flush microphone DMA queue to eliminate residual speaker echo
-            board_audio_t *audio = board_audio_init();
-            if (audio) {
-                int32_t discard[128];
-                size_t br = 0;
-                for (int i = 0; i < 10; i++) {
-                    board_audio_read(audio, discard, sizeof(discard), &br, pdMS_TO_TICKS(10));
+            // 4. Multi-Turn Session Loop
+            while (session_active) {
+                turn_index++;
+                if (turn_index > RBOT_MAX_SESSION_TURNS) {
+                    ESP_LOGI(TAG_STATE, "🏁 Session turn limit (%d) reached. Closing session.", RBOT_MAX_SESSION_TURNS);
+                    break;
+                }
+                int64_t session_elapsed_ms = (esp_timer_get_time() / 1000) - session_start_ms;
+                if (session_elapsed_ms >= RBOT_MAX_SESSION_DURATION_MS) {
+                    ESP_LOGI(TAG_STATE, "🏁 Session duration limit (%u ms) reached. Closing session.",
+                             (unsigned)RBOT_MAX_SESSION_DURATION_MS);
+                    break;
+                }
+                if (s_session_abort_requested) {
+                    ESP_LOGI(TAG_STATE, "🛑 Abort requested before turn %d. Closing session.", turn_index);
+                    break;
+                }
+
+                uint32_t wait_timeout_ms = (turn_index == 1) ?
+                    RBOT_SPEECH_START_TIMEOUT_INITIAL_MS :
+                    RBOT_SPEECH_START_TIMEOUT_FOLLOWUP_MS;
+
+                ESP_LOGI(TAG_STATE, "▶️ Turn %d: waiting for speech (timeout=%u ms)...",
+                         turn_index, (unsigned)wait_timeout_ms);
+
+                rbot_turn_result_t turn_res = TURN_RESULT_ERROR;
+                esp_err_t err = voice_chat_execute_turn(wait_timeout_ms, session_id, turn_index, req.trigger, &turn_res);
+
+                if (turn_res == TURN_RESULT_NO_SPEECH_TIMEOUT) {
+                    if (turn_index == 1) {
+                        ESP_LOGI(TAG_STATE, "Initial speech timeout (no speech detected). Closing session.");
+                    } else {
+                        ESP_LOGI(TAG_STATE, "Follow-up window (%u ms) expired with no speech. Closing session.",
+                                 (unsigned)RBOT_FOLLOW_UP_WINDOW_MS);
+                    }
+                    session_active = false;
+                } else if (turn_res == TURN_RESULT_SESSION_END) {
+                    ESP_LOGI(TAG_STATE, "Explicit session exit action received. Closing session.");
+                    session_active = false;
+                } else if (turn_res == TURN_RESULT_ERROR || err != ESP_OK) {
+                    ESP_LOGE(TAG_STATE, "Turn error occurred (res=%d, err=%d). Ending session.", (int)turn_res, err);
+                    session_active = false;
+                } else {
+                    // Turn succeeded with TURN_RESULT_CONTINUE!
+                    ESP_LOGI(TAG_STATE, "Turn %d completed. Entering follow-up window...", turn_index);
+                    if (s_session_abort_requested) {
+                        ESP_LOGI(TAG_STATE, "Session aborted via button after turn %d.", turn_index);
+                        session_active = false;
+                    }
                 }
             }
 
-            // 6. Resume wake word listening and set face to IDLE
-            wake_word_sr_resume();
+            // 5. Session Cleanup & Termination
+            ESP_LOGI(TAG_STATE, "🏁 [SESSION END] Session '%s' closed after %d turns (Total: %lld ms)",
+                     session_id, turn_index, (esp_timer_get_time() / 1000) - session_start_ms);
+            voice_chat_close_backend_session(session_id);
+
+            // 6. Transition face to IDLE
             board_face_set_state(FACE_IDLE);
 
+            // 7. WakeNet cooldown & resume listening
+            vTaskDelay(pdMS_TO_TICKS(500));
+            wake_word_sr_resume();
+
             s_interaction_busy = false;
-            ESP_LOGI(TAG_STATE, "✅ [INTERACTION] Turn finished, returned to IDLE listening");
+            ESP_LOGI(TAG_STATE, "✅ [WAKE_LISTENING] WakeNet resumed, ready for new wake word or button press");
         }
     }
 }
@@ -1261,11 +1323,27 @@ void app_main(void)
     ESP_LOGI("MAIN", "\n*** Rbot ready! Say '%s' or send 'TALK' / touch GPIO 14 ***\n", wake_word_sr_get_word_name());
 
     int last_touch = 1;
+    int touch_held_ms = 0;
     while(1) {
         int touch = gpio_get_level(PIN_TOUCH);
-        if (touch == 0 && last_touch == 1) { // Pressed / touched
-            ESP_LOGI("MAIN", "Touch/Button on GPIO %d pressed! Starting Voice Chat Turn...", PIN_TOUCH);
-            rbot_request_turn(TRIGGER_BUTTON, 10);
+        if (touch == 0) { // Pressed / held down
+            touch_held_ms += 100;
+            if (touch_held_ms == RBOT_BUTTON_LONG_PRESS_MS) { // 1.5s threshold reached
+                ESP_LOGI("MAIN", "🛑 Touch/Button on GPIO %d LONG PRESSED (>=1.5s)! Requesting session abort...", PIN_TOUCH);
+                rbot_signal_session_end();
+            }
+        } else { // Released
+            if (last_touch == 0 && touch_held_ms < RBOT_BUTTON_LONG_PRESS_MS) { // Short press release
+                ESP_LOGI("MAIN", "🔘 Touch/Button on GPIO %d SHORT PRESSED (%d ms)", PIN_TOUCH, touch_held_ms);
+                if (s_interaction_busy) {
+                    // In active session (e.g. follow-up wait): signal immediate speech onset!
+                    voice_chat_signal_button_pressed();
+                } else {
+                    // In idle: start new multi-turn session!
+                    rbot_request_turn(TRIGGER_BUTTON, 10);
+                }
+            }
+            touch_held_ms = 0;
         }
         last_touch = touch;
 

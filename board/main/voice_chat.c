@@ -23,6 +23,8 @@
 static const char *TAG_VC = "VOICE_CHAT";
 
 static char s_backend_url[128] = DEFAULT_BACKEND_VOICE_URL;
+static volatile bool s_button_interrupt = false;
+
 extern board_display_t *g_disp;
 
 void voice_chat_set_backend_url(const char *url)
@@ -32,6 +34,18 @@ void voice_chat_set_backend_url(const char *url)
         s_backend_url[sizeof(s_backend_url) - 1] = '\0';
         ESP_LOGI(TAG_VC, "Backend URL updated to: %s", s_backend_url);
     }
+}
+
+void voice_chat_signal_button_pressed(void)
+{
+    s_button_interrupt = true;
+}
+
+bool voice_chat_consume_button_pressed(void)
+{
+    bool r = s_button_interrupt;
+    s_button_interrupt = false;
+    return r;
 }
 
 static void update_status(ai_state_t st, const char *msg, bool anim, float level)
@@ -82,24 +96,81 @@ esp_err_t voice_chat_init(void)
     return ESP_OK;
 }
 
-esp_err_t voice_chat_trigger_turn(uint32_t duration_sec, rbot_trigger_t trigger)
+void voice_chat_close_backend_session(const char *session_id)
 {
-    if (duration_sec == 0) duration_sec = 5;
-    if (duration_sec > 15) duration_sec = 15;
+    if (!session_id || strlen(session_id) == 0) return;
+
+    char close_url[160];
+    // Replace /chat/voice with /chat/session/close if present
+    char *p = strstr(s_backend_url, "/chat/voice");
+    if (p) {
+        size_t base_len = p - s_backend_url;
+        snprintf(close_url, sizeof(close_url), "%.*s/chat/session/close", (int)base_len, s_backend_url);
+    } else {
+        snprintf(close_url, sizeof(close_url), "%s/session/close", s_backend_url);
+    }
+
+    esp_http_client_config_t cfg = {
+        .url = close_url,
+        .method = HTTP_METHOD_POST,
+        .timeout_ms = 3000,
+    };
+    esp_http_client_handle_t client = esp_http_client_init(&cfg);
+    if (!client) return;
+
+    char body[64];
+    snprintf(body, sizeof(body), "{\"session_id\":\"%s\"}", session_id);
+    esp_http_client_set_header(client, "Content-Type", "application/json");
+    esp_http_client_set_header(client, "X-Session-Id", session_id);
+    esp_http_client_set_post_field(client, body, strlen(body));
+
+    esp_err_t err = esp_http_client_perform(client);
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG_VC, "Backend session '%s' closed gracefully", session_id);
+    }
+    esp_http_client_cleanup(client);
+}
+
+typedef struct {
+    bool is_session_end;
+} http_resp_meta_t;
+
+static esp_err_t _voice_chat_http_event(esp_http_client_event_t *evt) {
+    if (evt->event_id == HTTP_EVENT_ON_HEADER) {
+        if (strcasecmp(evt->header_key, "X-Session-Action") == 0) {
+            http_resp_meta_t *meta = (http_resp_meta_t *)evt->user_data;
+            if (meta && strstr(evt->header_value, "end") != NULL) {
+                meta->is_session_end = true;
+                ESP_LOGI(TAG_VC, "Intercepted response header X-Session-Action: %s", evt->header_value);
+            }
+        }
+    }
+    return ESP_OK;
+}
+
+esp_err_t voice_chat_execute_turn(uint32_t speech_start_timeout_ms,
+                                  const char *session_id,
+                                  int turn_index,
+                                  rbot_trigger_t trigger,
+                                  rbot_turn_result_t *out_result)
+{
+    if (!out_result) return ESP_ERR_INVALID_ARG;
+    *out_result = TURN_RESULT_ERROR;
 
     const uint32_t sample_rate = 16000;
-    const uint32_t total_samples = duration_sec * sample_rate;
-    const size_t buf_bytes = total_samples * sizeof(int16_t);
+    const uint32_t max_recording_samples = (RBOT_MAX_RECORDING_DURATION_MS / 1000) * sample_rate;
+    const size_t max_buf_bytes = max_recording_samples * sizeof(int16_t);
     const size_t wav_header_len = 44;
-    const float hpf_alpha = 0.96586f;
+    const float hpf_alpha = 0.96586f; // ~80 Hz cutoff for 16 kHz sample rate
 
-    ESP_LOGI(TAG_VC, "=== Starting Voice Chat Turn (%u sec max, trigger=%d) ===",
-             (unsigned)duration_sec, (int)trigger);
+    ESP_LOGI(TAG_VC, "=== Execute Turn %d (Session: %s, Speech Start Timeout: %u ms, Max Rec: %u ms) ===",
+             turn_index, session_id ? session_id : "none",
+             (unsigned)speech_start_timeout_ms, (unsigned)RBOT_MAX_RECORDING_DURATION_MS);
 
-    // 0. Check Wi-Fi
+    // 0. Check Wi-Fi connectivity
     wifi_status_t wf = board_get_wifi_status();
     if (wf != WIFI_CONNECTED && wf != WIFI_CONNECTED_STABLE) {
-        ESP_LOGW(TAG_VC, "Wi-Fi not connected yet! Waiting up to 5s...");
+        ESP_LOGW(TAG_VC, "Wi-Fi not connected! Waiting up to 5s...");
         update_status(AI_IDLE, "CONNECTING WIFI...", false, 0.0f);
         int waited = 0;
         while (waited < 50) {
@@ -115,41 +186,42 @@ esp_err_t voice_chat_trigger_turn(uint32_t duration_sec, rbot_trigger_t trigger)
         }
     }
 
-    // 1. Allocate Audio Buffer in PSRAM
-    int16_t *buf = (int16_t *)heap_caps_malloc(buf_bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    // 1. Allocate Audio Buffer in PSRAM for recording
+    int16_t *buf = (int16_t *)heap_caps_malloc(max_buf_bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!buf) {
-        buf = (int16_t *)malloc(buf_bytes);
+        buf = (int16_t *)malloc(max_buf_bytes);
     }
     if (!buf) {
-        ESP_LOGE(TAG_VC, "Failed to allocate %zu bytes for recording", buf_bytes);
+        ESP_LOGE(TAG_VC, "Failed to allocate %zu bytes for recording buffer", max_buf_bytes);
         board_face_set_error(FACE_ERR_GENERIC, "OUT OF MEM");
         return ESP_ERR_NO_MEM;
     }
 
+    // Pre-roll Circular Buffer (~300 ms = 4800 samples)
+    const size_t pre_roll_samples = (RBOT_PRE_ROLL_DURATION_MS * sample_rate) / 1000;
+    int16_t *preroll = (int16_t *)malloc(pre_roll_samples * sizeof(int16_t));
+    if (!preroll) {
+        ESP_LOGE(TAG_VC, "Failed to allocate pre-roll buffer");
+        free(buf);
+        return ESP_ERR_NO_MEM;
+    }
+    size_t preroll_head = 0;
+    size_t preroll_count = 0;
+
     board_audio_t *audio = board_audio_init();
     if (!audio) {
+        free(preroll);
         free(buf);
         board_face_set_error(FACE_ERR_AUDIO, "AUDIO FAIL");
         return ESP_FAIL;
     }
 
-    // 2. Visual Prompt & Countdown
-    if (trigger != TRIGGER_WAKE_WORD) {
-        for (int cd = 2; cd >= 1; cd--) {
-            char msg[24];
-            snprintf(msg, sizeof(msg), "TALK IN %d", cd);
-            update_status(AI_LISTENING, msg, false, 0.0f);
-            vTaskDelay(pdMS_TO_TICKS(800));
-        }
-    } else {
-        update_status(AI_LISTENING, "LISTENING...", true, 0.8f);
-    }
-
-    // 3. Start Mic & Discard Pre-roll
+    // 2. Start Microphone & discard initial startup thump
     esp_err_t err = board_audio_mic_start(audio);
     if (err != ESP_OK) {
         ESP_LOGE(TAG_VC, "Failed to start microphone: %d", err);
         update_status(AI_IDLE, "MIC ERROR", false, 0.0f);
+        free(preroll);
         free(buf);
         return err;
     }
@@ -163,22 +235,140 @@ esp_err_t voice_chat_trigger_turn(uint32_t duration_sec, rbot_trigger_t trigger)
         else break;
     }
 
-    // 4. Recording Loop with Silence / VAD Early-Stopping
-    ESP_LOGI(TAG_VC, "🎤 RECORDING NOW (max %u seconds)...", (unsigned)duration_sec);
-    int32_t raw_chunk[128];
-    float prev_x = 0.0f, prev_y = 0.0f;
+    // Clear any pending button signal
+    voice_chat_consume_button_pressed();
+
+    // Visual prompt
+    if (turn_index == 1) {
+        update_status(AI_LISTENING, "LISTENING...", true, 0.8f);
+    } else {
+        update_status(AI_LISTENING, "TANYA LAGI...", true, 0.8f);
+    }
+
+    // 3. Phase A: Wait for Speech Onset (with Rolling Pre-Roll)
+    int64_t wait_start_time_ms = esp_timer_get_time() / 1000;
+    int64_t rec_start_time_ms = 0;
+    bool speech_detected = false;
     uint32_t captured = 0;
     int32_t peak = 0;
     int64_t sum_sq = 0;
+
+    int32_t raw_chunk[128];
+    float prev_x = 0.0f, prev_y = 0.0f;
+    int last_rem_wait_sec = -1;
+
+    const float speech_rms_threshold = 350.0f;
+    const uint32_t silence_cutoff_samples = (RBOT_END_OF_TURN_SILENCE_MS * sample_rate) / 1000; // 24000 = 1.5s
+    const uint32_t min_speech_samples = (RBOT_MIN_SPEECH_DURATION_MS * sample_rate) / 1000;     // 6400 = 0.4s
+
+    while (!speech_detected) {
+        int64_t now_ms = esp_timer_get_time() / 1000;
+        if ((now_ms - wait_start_time_ms) >= speech_start_timeout_ms) {
+            ESP_LOGI(TAG_VC, "⏳ Speech start timeout reached (%lld ms, no speech onset)", now_ms - wait_start_time_ms);
+            break;
+        }
+
+        // Countdown visual update for follow-up wait
+        int rem_wait_sec = (int)((speech_start_timeout_ms - (now_ms - wait_start_time_ms) + 999) / 1000);
+        if (rem_wait_sec < 1) rem_wait_sec = 1;
+        if (turn_index > 1 && rem_wait_sec != last_rem_wait_sec) {
+            last_rem_wait_sec = rem_wait_sec;
+            char msg[24];
+            snprintf(msg, sizeof(msg), "TANYA LAGI %d", rem_wait_sec);
+            update_status(AI_LISTENING, msg, true, 0.8f);
+        }
+
+        // Check if button was tapped to force start recording immediately
+        if (voice_chat_consume_button_pressed()) {
+            ESP_LOGI(TAG_VC, "Button pressed during wait: forcing speech onset!");
+            speech_detected = true;
+            rec_start_time_ms = esp_timer_get_time() / 1000;
+            break;
+        }
+
+        size_t bytes_read = 0;
+        err = board_audio_read(audio, raw_chunk, sizeof(raw_chunk), &bytes_read, pdMS_TO_TICKS(100));
+        if (err != ESP_OK || bytes_read == 0) {
+            vTaskDelay(pdMS_TO_TICKS(10));
+            continue;
+        }
+
+        size_t samples = bytes_read / sizeof(int32_t);
+        int64_t chunk_sum_sq = 0;
+
+        for (size_t i = 0; i < samples; i++) {
+            int16_t s = inmp441_to_pcm16(raw_chunk[i]);
+            float x = (float)s;
+            float y = hpf_alpha * (prev_y + x - prev_x);
+            prev_x = x;
+            prev_y = y;
+
+            int32_t s_clean = (int32_t)y;
+            if (s_clean > 32767)  s_clean = 32767;
+            if (s_clean < -32768) s_clean = -32768;
+
+            preroll[preroll_head] = (int16_t)s_clean;
+            preroll_head = (preroll_head + 1) % pre_roll_samples;
+            if (preroll_count < pre_roll_samples) {
+                preroll_count++;
+            }
+
+            chunk_sum_sq += (int64_t)s_clean * s_clean;
+        }
+
+        if (samples > 0) {
+            float chunk_rms = sqrtf((float)chunk_sum_sq / samples);
+            if (chunk_rms > speech_rms_threshold) {
+                speech_detected = true;
+                rec_start_time_ms = esp_timer_get_time() / 1000;
+                ESP_LOGI(TAG_VC, "🗣️ Speech onset detected! (RMS: %.0f, waited %lld ms)",
+                         chunk_rms, rec_start_time_ms - wait_start_time_ms);
+                break;
+            }
+        }
+    }
+
+    if (!speech_detected) {
+        // No speech onset occurred during timeout window
+        board_audio_mic_stop(audio);
+        free(preroll);
+        free(buf);
+        *out_result = TURN_RESULT_NO_SPEECH_TIMEOUT;
+        return ESP_OK;
+    }
+
+    // 4. Phase B: Speech Onset Detected -> Record Speech with VAD Early-Cutoff & Max Duration
+    // Copy pre-roll buffer in chronological order into recording buffer
+    size_t start_idx = (preroll_head + pre_roll_samples - preroll_count) % pre_roll_samples;
+    for (size_t p = 0; p < preroll_count; p++) {
+        int16_t s = preroll[(start_idx + p) % pre_roll_samples];
+        buf[captured++] = s;
+        int32_t a = (s < 0) ? -s : s;
+        if (a > peak) peak = a;
+        sum_sq += (int64_t)s * s;
+    }
+    free(preroll);
+    preroll = NULL;
+
+    ESP_LOGI(TAG_VC, "🎤 RECORDING SPEECH (Pre-roll: %u samples, max %u ms)...",
+             (unsigned)captured, (unsigned)RBOT_MAX_RECORDING_DURATION_MS);
+
+    uint32_t speech_samples = captured;
+    uint32_t silent_samples = 0;
     int current_rec_sec = -1;
 
-    bool speech_detected = false;
-    uint32_t silent_samples = 0;
-    const uint32_t silence_cutoff_samples = 24000; // 1.5s of silence after speech
-    const uint32_t min_speech_samples = 16000;     // at least 1.0s before early stop
+    while (captured < max_recording_samples) {
+        int64_t now_ms = esp_timer_get_time() / 1000;
+        int64_t elapsed_rec_ms = now_ms - rec_start_time_ms;
 
-    while (captured < total_samples) {
-        int rem_rec_sec = (int)((total_samples - captured + sample_rate - 1) / sample_rate);
+        // Check Maximum Recording Duration
+        if (elapsed_rec_ms >= RBOT_MAX_RECORDING_DURATION_MS) {
+            ESP_LOGI(TAG_VC, "⏹️ Maximum recording duration reached (%u ms)", (unsigned)RBOT_MAX_RECORDING_DURATION_MS);
+            break;
+        }
+
+        // Remaining recording seconds countdown
+        int rem_rec_sec = (int)((RBOT_MAX_RECORDING_DURATION_MS - elapsed_rec_ms + 999) / 1000);
         if (rem_rec_sec < 1) rem_rec_sec = 1;
         if (rem_rec_sec != current_rec_sec) {
             current_rec_sec = rem_rec_sec;
@@ -188,7 +378,7 @@ esp_err_t voice_chat_trigger_turn(uint32_t duration_sec, rbot_trigger_t trigger)
         }
 
         size_t bytes_read = 0;
-        err = board_audio_read(audio, raw_chunk, sizeof(raw_chunk), &bytes_read, pdMS_TO_TICKS(200));
+        err = board_audio_read(audio, raw_chunk, sizeof(raw_chunk), &bytes_read, pdMS_TO_TICKS(100));
         if (err != ESP_OK || bytes_read == 0) {
             vTaskDelay(pdMS_TO_TICKS(10));
             continue;
@@ -197,7 +387,7 @@ esp_err_t voice_chat_trigger_turn(uint32_t duration_sec, rbot_trigger_t trigger)
         size_t samples = bytes_read / sizeof(int32_t);
         int64_t chunk_sum_sq = 0;
 
-        for (size_t i = 0; i < samples && captured < total_samples; i++) {
+        for (size_t i = 0; i < samples && captured < max_recording_samples; i++) {
             int16_t s = inmp441_to_pcm16(raw_chunk[i]);
             float x = (float)s;
             float y = hpf_alpha * (prev_y + x - prev_x);
@@ -216,16 +406,17 @@ esp_err_t voice_chat_trigger_turn(uint32_t duration_sec, rbot_trigger_t trigger)
             chunk_sum_sq += (int64_t)s_clean * s_clean;
         }
 
-        // Energy-based silence detection
+        // VAD Continuous Silence & Early-Cutoff Logic
         if (samples > 0) {
             float chunk_rms = sqrtf((float)chunk_sum_sq / samples);
-            if (chunk_rms > 350.0f) {
-                speech_detected = true;
-                silent_samples = 0;
-            } else if (speech_detected && captured >= min_speech_samples) {
+            if (chunk_rms > speech_rms_threshold) {
+                speech_samples += samples;
+                silent_samples = 0; // CONTINUOUS SILENCE RESET!
+            } else {
                 silent_samples += samples;
-                if (silent_samples >= silence_cutoff_samples) {
-                    ESP_LOGI(TAG_VC, "Silence detected (1.5s), stopping recording early at %u samples", (unsigned)captured);
+                if (speech_samples >= min_speech_samples && silent_samples >= silence_cutoff_samples) {
+                    ESP_LOGI(TAG_VC, "⏹️ VAD Early-Cutoff: Continuous silence (1.5s) detected (dur=%lld ms, samples=%u)",
+                             now_ms - rec_start_time_ms, (unsigned)captured);
                     break;
                 }
             }
@@ -234,15 +425,16 @@ esp_err_t voice_chat_trigger_turn(uint32_t duration_sec, rbot_trigger_t trigger)
 
     board_audio_mic_stop(audio);
     float rms = (captured > 0) ? sqrtf((float)sum_sq / captured) : 0.0f;
-    ESP_LOGI(TAG_VC, "Recording finished: %u samples (RMS: %.0f, Peak: %d)",
-             (unsigned)captured, rms, (int)peak);
+    ESP_LOGI(TAG_VC, "Recording finished: %u samples (RMS: %.0f, Peak: %d, Dur: %lld ms)",
+             (unsigned)captured, rms, (int)peak, (esp_timer_get_time() / 1000) - rec_start_time_ms);
 
     const size_t actual_buf_bytes = captured * sizeof(int16_t);
     const size_t actual_upload_len = wav_header_len + actual_buf_bytes;
 
     // 5. Send Audio via HTTP POST to Backend
     update_status(AI_THINKING, "THINKING...", true, 0.5f);
-    ESP_LOGI(TAG_VC, "Sending audio (%u bytes) to backend: %s", (unsigned)actual_upload_len, s_backend_url);
+    ESP_LOGI(TAG_VC, "Sending audio (%u bytes) to backend: %s [Session: %s, Turn: %d]",
+             (unsigned)actual_upload_len, s_backend_url, session_id ? session_id : "none", turn_index);
 
     // Prepare 44-byte WAV header with actual length
     uint8_t header[44] = {0};
@@ -271,12 +463,15 @@ esp_err_t voice_chat_trigger_turn(uint32_t duration_sec, rbot_trigger_t trigger)
     header[42] = (actual_buf_bytes >> 16) & 0xFF;
     header[43] = (actual_buf_bytes >> 24) & 0xFF;
 
+    http_resp_meta_t resp_meta = {0};
     esp_http_client_config_t http_cfg = {
         .url = s_backend_url,
         .method = HTTP_METHOD_POST,
         .timeout_ms = 35000,
         .buffer_size = 2048,
         .buffer_size_tx = 2048,
+        .event_handler = _voice_chat_http_event,
+        .user_data = &resp_meta,
     };
 
     esp_http_client_handle_t client = esp_http_client_init(&http_cfg);
@@ -288,6 +483,12 @@ esp_err_t voice_chat_trigger_turn(uint32_t duration_sec, rbot_trigger_t trigger)
     }
 
     esp_http_client_set_header(client, "Content-Type", "audio/wav");
+    if (session_id && strlen(session_id) > 0) {
+        esp_http_client_set_header(client, "X-Session-Id", session_id);
+    }
+    char turn_hdr[16];
+    snprintf(turn_hdr, sizeof(turn_hdr), "%d", turn_index);
+    esp_http_client_set_header(client, "X-Turn-Index", turn_hdr);
 
     err = esp_http_client_open(client, actual_upload_len);
     if (err != ESP_OK) {
@@ -316,11 +517,11 @@ esp_err_t voice_chat_trigger_turn(uint32_t duration_sec, rbot_trigger_t trigger)
         sent += written;
     }
 
-    // Audio buffer in PSRAM no longer needed
+    // Free recording buffer immediately
     free(buf);
     buf = NULL;
 
-    // 6. Fetch HTTP Response
+    // 6. Fetch HTTP Response & Headers
     int content_length = esp_http_client_fetch_headers(client);
     int status_code = esp_http_client_get_status_code(client);
     ESP_LOGI(TAG_VC, "HTTP Response status=%d, content_length=%d", status_code, content_length);
@@ -331,6 +532,12 @@ esp_err_t voice_chat_trigger_turn(uint32_t duration_sec, rbot_trigger_t trigger)
         esp_http_client_cleanup(client);
         board_face_set_error(FACE_ERR_SERVER, "SERVER ERR");
         return ESP_FAIL;
+    }
+
+    // Check if backend signaled session closure (explicit verbal exit)
+    bool is_session_end = resp_meta.is_session_end;
+    if (is_session_end) {
+        ESP_LOGI(TAG_VC, "Backend signaled X-Session-Action: end");
     }
 
     // 7. Stream Response Audio to Speaker
@@ -357,19 +564,45 @@ esp_err_t voice_chat_trigger_turn(uint32_t duration_sec, rbot_trigger_t trigger)
         total_played_bytes += r;
     }
 
-    ESP_LOGI(TAG_VC, "Submitted %u bytes to audio player, waiting playback...",
+    ESP_LOGI(TAG_VC, "Submitted %u bytes to audio player, waiting playback to complete...",
              (unsigned)total_played_bytes);
 
-    audio_player_wait_empty(10000);
+    audio_player_wait_empty(15000);
     audio_player_stop();
 
     esp_http_client_close(client);
     esp_http_client_cleanup(client);
 
-    ESP_LOGI(TAG_VC, "=== Voice Chat Turn Finished Successfully ===");
-    board_face_trigger_happy(1200);
-    printf("STATUS:HAPPY\r\n");
+    // 8. Speaker Cooldown & Microphone Flush (Self-detection prevention)
+    vTaskDelay(pdMS_TO_TICKS(RBOT_SPEAKER_COOLDOWN_MS));
+    if (audio) {
+        int32_t discard[128];
+        size_t br = 0;
+        for (int i = 0; i < 10; i++) {
+            board_audio_read(audio, discard, sizeof(discard), &br, pdMS_TO_TICKS(10));
+        }
+    }
+
+    ESP_LOGI(TAG_VC, "=== Turn %d Completed Successfully (Action: %s) ===",
+             turn_index, is_session_end ? "END" : "CONTINUE");
+
+    if (is_session_end) {
+        board_face_trigger_happy(1200);
+        printf("STATUS:HAPPY_END\r\n");
+        *out_result = TURN_RESULT_SESSION_END;
+    } else {
+        board_face_trigger_happy(800);
+        printf("STATUS:HAPPY\r\n");
+        *out_result = TURN_RESULT_CONTINUE;
+    }
     fflush(stdout);
 
     return ESP_OK;
+}
+
+esp_err_t voice_chat_trigger_turn(uint32_t duration_sec, rbot_trigger_t trigger)
+{
+    (void)duration_sec;
+    rbot_turn_result_t res;
+    return voice_chat_execute_turn(RBOT_SPEECH_START_TIMEOUT_INITIAL_MS, "legacy_turn", 1, trigger, &res);
 }

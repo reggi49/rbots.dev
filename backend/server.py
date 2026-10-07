@@ -114,19 +114,114 @@ def transcribe_audio(audio_bytes: bytes) -> tuple[str, str]:
     return txt, "gemini"
 
 
-# --- 2. LLM Service (Gemini) ---
-def generate_llm_response(prompt_text: str) -> str:
+# --- Multi-turn Session Manager ---
+import re
+
+EXIT_PHRASES = {
+    "sudah dulu", "cukup", "udahan", "selesai", "sampai nanti",
+    "selamat tinggal", "kembali tidur", "berhenti ngobrol", "itu saja",
+    "bye", "bye bye", "goodbye", "stop"
+}
+
+COURTESY_WORDS = {
+    "terima", "kasih", "makasih", "banyak", "oke", "ok", "baiklah",
+    "ya", "dong", "deh", "kak", "bot", "saja"
+}
+
+def is_explicit_exit(text: str) -> bool:
+    clean = re.sub(r"[^\w\s]", "", text.lower()).strip()
+    if not clean:
+        return False
+    if clean in EXIT_PHRASES:
+        return True
+    
+    words = clean.split()
+    start_idx = 0
+    while start_idx < len(words) and words[start_idx] in COURTESY_WORDS:
+        start_idx += 1
+    end_idx = len(words)
+    while end_idx > start_idx and words[end_idx - 1] in COURTESY_WORDS:
+        end_idx -= 1
+        
+    core = " ".join(words[start_idx:end_idx]).strip()
+    if core in EXIT_PHRASES:
+        return True
+    return False
+
+
+class SessionManager:
+    def __init__(self, ttl_seconds: int = 300):
+        self.ttl = ttl_seconds
+        self.sessions: dict[str, dict] = {}
+
+    def get_history(self, session_id: str) -> list[types.Content]:
+        self.cleanup()
+        if session_id and session_id in self.sessions:
+            self.sessions[session_id]["last_active"] = time.monotonic()
+            return list(self.sessions[session_id]["history"])
+        return []
+
+    def add_turn(self, session_id: str, user_text: str, bot_reply: str):
+        if not session_id:
+            return
+        self.cleanup()
+        if session_id not in self.sessions:
+            self.sessions[session_id] = {
+                "history": [],
+                "created_at": time.monotonic(),
+                "last_active": time.monotonic(),
+                "turns": 0,
+            }
+        s = self.sessions[session_id]
+        s["history"].append(
+            types.Content(role="user", parts=[types.Part.from_text(text=user_text)])
+        )
+        s["history"].append(
+            types.Content(role="model", parts=[types.Part.from_text(text=bot_reply)])
+        )
+        if len(s["history"]) > 20:
+            s["history"] = s["history"][-20:]
+        s["last_active"] = time.monotonic()
+        s["turns"] += 1
+
+    def close_session(self, session_id: str):
+        if session_id in self.sessions:
+            del self.sessions[session_id]
+
+    def cleanup(self):
+        now = time.monotonic()
+        expired = [sid for sid, data in self.sessions.items() if now - data["last_active"] > self.ttl]
+        for sid in expired:
+            del self.sessions[sid]
+
+session_manager = SessionManager(ttl_seconds=300)
+
+
+# --- 2. LLM Service (Gemini Multi-Turn) ---
+def generate_llm_response(prompt_text: str, session_id: str = "") -> str:
+    history = session_manager.get_history(session_id)
+    contents = list(history)
+    contents.append(
+        types.Content(role="user", parts=[types.Part.from_text(text=prompt_text)])
+    )
+
     res = gemini_client.models.generate_content(
         model=GEMINI_MODEL,
-        contents=prompt_text,
+        contents=contents,
         config=types.GenerateContentConfig(
             system_instruction=SYSTEM_INSTRUCTION,
             max_output_tokens=160,
             temperature=0.7,
         ),
     )
-    text = res.text.strip() if res.text else ""
-    return text
+    bot_reply = res.text.strip() if res.text else ""
+    if not bot_reply:
+        bot_reply = "Halo, saya Reggi Bot. Ada yang bisa saya bantu?"
+
+    if session_id:
+        session_manager.add_turn(session_id, prompt_text, bot_reply)
+
+    return bot_reply
 
 
 # --- 3. Text-to-Speech Service ---
@@ -249,14 +344,23 @@ async def chat_voice(request: Request):
     if not user_text.strip():
         user_text = "Halo?"
 
-    # 2. LLM (Gemini)
+    # 2. LLM (Gemini with Multi-turn Session & Explicit Exit)
+    session_id = (request.headers.get("X-Session-Id") or "").strip()
+    is_exit = is_explicit_exit(user_text)
+    
     t_llm_0 = time.monotonic()
-    bot_reply = generate_llm_response(user_text)
-    t_llm = int((time.monotonic() - t_llm_0) * 1000)
-    print(f"[LLM - GEMINI] ({t_llm}ms): '{bot_reply}'")
+    if is_exit:
+        session_action = "end"
+        bot_reply = "Sama-sama! Senang mengobrol denganmu. Sampai jumpa lagi!"
+        if session_id:
+            session_manager.close_session(session_id)
+        print(f"[SESSION] Explicit exit detected for session '{session_id}': action=end")
+    else:
+        session_action = "continue"
+        bot_reply = generate_llm_response(user_text, session_id=session_id)
 
-    if not bot_reply.strip():
-        bot_reply = "Halo, saya Reggi Bot. Ada yang bisa saya bantu?"
+    t_llm = int((time.monotonic() - t_llm_0) * 1000)
+    print(f"[LLM - GEMINI] ({t_llm}ms) [Session: {session_id or 'none'} | Action: {session_action}]: '{bot_reply}'")
 
     # 3. Text-to-Speech
     t_tts_0 = time.monotonic()
@@ -278,8 +382,25 @@ async def chat_voice(request: Request):
             "X-LLM-Latency-Ms": str(t_llm),
             "X-TTS-Latency-Ms": str(t_tts),
             "X-Total-Latency-Ms": str(t_total),
+            "X-Session-Id": session_id,
+            "X-Session-Action": session_action,
         },
     )
+
+
+@app.post("/chat/session/close")
+async def close_session_endpoint(request: Request):
+    """Explicitly clean up an active session context in memory."""
+    body_data = {}
+    try:
+        body_data = await request.json()
+    except Exception:
+        pass
+    session_id = request.headers.get("X-Session-Id") or body_data.get("session_id", "")
+    if session_id:
+        session_manager.close_session(session_id)
+        print(f"[SESSION] Session '{session_id}' explicitly closed.")
+    return {"status": "closed", "session_id": session_id}
 
 
 # Individual test endpoints per requirements
