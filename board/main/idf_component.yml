@@ -15,5 +15,6 @@ dependencies:
   #   # All dependencies of `main` are public by default.
   #   public: true
   espressif/esp-tflite-micro: '*'
-  espressif/esp-sr: "2.1.1"
+  espressif/esp-sr: "2.5.5"
+  espressif/esp-dsp: "^1.6.0"
 

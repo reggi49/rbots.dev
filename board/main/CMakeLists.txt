@@ -28,6 +28,7 @@ idf_component_register(
         driver
         spi_flash
         espressif__esp-sr
+        espressif__esp-dsp
         json
         lwip
         esp-tls

@@ -74,19 +74,28 @@ esp_err_t wake_word_sr_init(wake_word_detected_cb_t callback)
     }
 
     // 2. Model selection hierarchy
-    // Check for Alexa (wn9_alexa), Hey Buddy, or Hi ESP (wn9_hiesp)
-    int idx_alexa = esp_srmodel_exists(s_models, "wn9_alexa");
-    int idx_heybuddy = esp_srmodel_exists(s_models, "wn10_en_heybuddy");
+    int idx_wn10_alexa = esp_srmodel_exists(s_models, "wn10_alexa");
+    int idx_wn9_alexa = esp_srmodel_exists(s_models, "wn9_alexa");
+    int idx_wn10_heybuddy = esp_srmodel_exists(s_models, "wn10_en_heybuddy");
+    int idx_wn10_hiesp = esp_srmodel_exists(s_models, "wn10_hiesp");
     int idx_wn9_hiesp = esp_srmodel_exists(s_models, "wn9_hiesp");
 
-    if (idx_alexa >= 0) {
+    if (idx_wn10_alexa >= 0) {
+        strncpy(s_active_model_name, "wn10_alexa", sizeof(s_active_model_name) - 1);
+        strncpy(s_active_word_name, "Alexa", sizeof(s_active_word_name) - 1);
+        ESP_LOGI(TAG_WW, "🎯 Selected PRIMARY WakeNet10 Model: %s (Wake Word: '%s')", s_active_model_name, s_active_word_name);
+    } else if (idx_wn9_alexa >= 0) {
         strncpy(s_active_model_name, "wn9_alexa", sizeof(s_active_model_name) - 1);
         strncpy(s_active_word_name, "Alexa", sizeof(s_active_word_name) - 1);
-        ESP_LOGI(TAG_WW, "🎯 Selected PRIMARY WakeNet Model: %s (Wake Word: '%s')", s_active_model_name, s_active_word_name);
-    } else if (idx_heybuddy >= 0) {
+        ESP_LOGI(TAG_WW, "🎯 Selected PRIMARY WakeNet9 Model: %s (Wake Word: '%s')", s_active_model_name, s_active_word_name);
+    } else if (idx_wn10_heybuddy >= 0) {
         strncpy(s_active_model_name, "wn10_en_heybuddy", sizeof(s_active_model_name) - 1);
         strncpy(s_active_word_name, "Hey Buddy", sizeof(s_active_word_name) - 1);
         ESP_LOGI(TAG_WW, "Selected PRIMARY Model: %s (Wake Word: '%s')", s_active_model_name, s_active_word_name);
+    } else if (idx_wn10_hiesp >= 0) {
+        strncpy(s_active_model_name, "wn10_hiesp", sizeof(s_active_model_name) - 1);
+        strncpy(s_active_word_name, "Hi ESP", sizeof(s_active_word_name) - 1);
+        ESP_LOGI(TAG_WW, "Selected FALLBACK Model: %s (Wake Word: '%s')", s_active_model_name, s_active_word_name);
     } else if (idx_wn9_hiesp >= 0) {
         strncpy(s_active_model_name, "wn9_hiesp", sizeof(s_active_model_name) - 1);
         strncpy(s_active_word_name, "Hi ESP", sizeof(s_active_word_name) - 1);
