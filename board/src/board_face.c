@@ -582,7 +582,7 @@ static void render_status_banner(void)
         txt_col = COL_WHITE;
     } else {
         switch (s_current_state) {
-            case FACE_BOOT:         label = "REGGI BOT"; txt_col = COL_CYAN; break;
+            case FACE_BOOT:         label = "R-BOT"; txt_col = COL_CYAN; break;
             case FACE_IDLE:         label = s_is_sleepy ? "SLEEPY..." : "READY"; txt_col = COL_WHITE; break;
             case FACE_LISTENING:    label = "LISTENING"; txt_col = COL_CYAN_BRIGHT; break;
             case FACE_THINKING:     label = "THINKING"; txt_col = COL_AMBER; break;

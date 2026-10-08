@@ -1,4 +1,4 @@
-# Reggi Bot (rbot) 🤖🎙️
+# R-bot 🤖🎙️
 
 > **Robot Percakapan Suara Interaktif Berbasis ESP32-S3, Layar Wajah Ekspresif ST7735, Wake Word Lokal WakeNet10, dan Cloud AI Pipeline (Gemini + Azure / Edge-TTS).**
 
@@ -25,11 +25,11 @@
 
 ## Ringkasan Proyek & Arsitektur
 
-Reggi Bot adalah asisten robot fisik cerdas yang mampu berinteraksi suara dua arah secara alami dalam Bahasa Indonesia. Sistem bekerja dalam mode **setengah dupleks (half-duplex)** dengan pipeline suara terintegrasi dan respons emosi visual real-time melalui layar TFT.
+R-bot adalah asisten robot fisik cerdas yang mampu berinteraksi suara dua arah secara alami dalam Bahasa Indonesia. Sistem bekerja dalam mode **setengah dupleks (half-duplex)** dengan pipeline suara terintegrasi dan respons emosi visual real-time melalui layar TFT.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                           REGGI BOT INTERACTION                         │
+│                             R-BOT INTERACTION                           │
 └─────────────────────────────────────────────────────────────────────────┘
    [Pengguna]
        │ Mengucapkan kata "Alexa" atau menekan tombol GPIO 14

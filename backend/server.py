@@ -11,6 +11,7 @@ import tempfile
 import subprocess
 from pathlib import Path
 from xml.sax.saxutils import escape
+import urllib.parse
 
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent / ".env")
@@ -26,6 +27,7 @@ import edge_tts
 AZURE_SPEECH_KEY = (os.getenv("AZURE_SPEECH_KEY") or "").strip()
 AZURE_SPEECH_REGION = (os.getenv("AZURE_SPEECH_REGION") or "southeastasia").strip()
 AISTUDIO_API_KEY = (os.getenv("AISTUDIO_API_KEY") or "").strip()
+BRAVE_API_KEY = (os.getenv("BRAVE_API_KEY") or "").strip()
 
 GEMINI_MODEL = "gemini-3.5-flash-lite"
 TTS_VOICE = "id-ID-ArdiNeural"
@@ -46,14 +48,19 @@ def is_valid_azure_key(key: str) -> bool:
 AZURE_ACTIVE = is_valid_azure_key(AZURE_SPEECH_KEY)
 
 SYSTEM_INSTRUCTION = (
-    "Kamu adalah robot kecil bernama Reggi Bot. Jawablah dengan ramah, singkat, "
+    "Kamu adalah robot kecil bernama R-bot. Jawablah dengan ramah, singkat, "
     "natural, dan mudah didengar melalui speaker kecil. Gunakan Bahasa Indonesia "
     "kecuali pengguna meminta bahasa lain. Jawaban maksimal 40 sampai 50 kata, "
     "cocok untuk diucapkan, tanpa format markdown, tanpa bullet point, tanpa simbol rumit, "
-    "dan jangan awali jawaban dengan kata 'Sebagai AI'."
+    "dan jangan awali jawaban dengan kata 'Sebagai AI'.\n\n"
+    "ATURAN PENGGUNAAN TOOL:\n"
+    "- Gunakan tool search_web HANYA untuk: fakta terkini, jabatan/tokoh publik saat ini, "
+    "cuaca, berita terbaru, atau informasi yang mungkin telah berubah setelah tahun 2024.\n"
+    "- JANGAN gunakan search_web untuk: sapaan, perkenalan, lelucon, opini, definisi umum, "
+    "matematika, atau obrolan santai."
 )
 
-app = FastAPI(title="Reggi Bot Conversational Audio Pipeline")
+app = FastAPI(title="R-bot Conversational Audio Pipeline")
 
 app.add_middleware(
     CORSMiddleware,
@@ -198,6 +205,35 @@ session_manager = SessionManager(ttl_seconds=300)
 
 
 # --- 2. LLM Service (Gemini Multi-Turn) ---
+def search_web(query: str) -> str:
+    """Melakukan pencarian di internet untuk mendapatkan informasi terbaru atau fakta yang belum diketahui."""
+    print(f"[SEARCH] Query: {query}")
+    if not BRAVE_API_KEY:
+        return "Brave API key not configured."
+    url = f"https://api.search.brave.com/res/v1/web/search?q={urllib.parse.quote(query)}"
+    headers = {
+        "Accept": "application/json",
+        "Accept-Encoding": "gzip",
+        "X-Subscription-Token": BRAVE_API_KEY
+    }
+    try:
+        resp = requests.get(url, headers=headers, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        results = data.get("web", {}).get("results", [])
+        if not results:
+            return "Tidak ada hasil pencarian."
+        
+        snippets = []
+        for r in results[:3]:
+            title = r.get("title", "")
+            description = r.get("description", "")
+            snippets.append(f"Title: {title}\nSummary: {description}")
+        return "\n\n".join(snippets)
+    except Exception as e:
+        print(f"[SEARCH ERR] {e}")
+        return f"Pencarian gagal: {e}"
+
 def generate_llm_response(prompt_text: str, session_id: str = "") -> str:
     history = session_manager.get_history(session_id)
     contents = list(history)
@@ -210,13 +246,14 @@ def generate_llm_response(prompt_text: str, session_id: str = "") -> str:
         contents=contents,
         config=types.GenerateContentConfig(
             system_instruction=SYSTEM_INSTRUCTION,
+            tools=[search_web],
             max_output_tokens=160,
             temperature=0.7,
         ),
     )
     bot_reply = res.text.strip() if res.text else ""
     if not bot_reply:
-        bot_reply = "Halo, saya Reggi Bot. Ada yang bisa saya bantu?"
+        bot_reply = "Halo, saya R-bot. Ada yang bisa saya bantu?"
 
     if session_id:
         session_manager.add_turn(session_id, prompt_text, bot_reply)
@@ -407,7 +444,7 @@ async def close_session_endpoint(request: Request):
 @app.post("/test/tts")
 async def test_tts(request: Request):
     data = await request.json()
-    text = data.get("text", "Halo Reggi. Sistem suara robot berhasil terhubung.")
+    text = data.get("text", "Halo, saya R-bot. Sistem suara robot berhasil terhubung.")
     wav, engine = await synthesize_speech(text)
     return Response(
         content=wav,

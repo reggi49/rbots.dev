@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-talk_rbot.py - Trigger voice chat conversation with Reggi Bot on ESP32-S3.
+talk_rbot.py - Trigger voice chat conversation with R-bot on ESP32-S3.
 Mirrors ST7735 LCD status in terminal:
   - TALK IN 3..2..1
   - RECORDING 5..4..3..2..1 (speak your question in Indonesian)
@@ -101,7 +101,7 @@ def run_talk(s, duration=5):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Trigger Reggi Bot conversational voice chat")
+    parser = argparse.ArgumentParser(description="Trigger R-bot conversational voice chat")
     parser.add_argument("port", nargs="?", default=None, help="Serial port")
     parser.add_argument("--duration", "-d", type=int, default=5, help="Durasi rekaman dalam detik (default 5)")
     args = parser.parse_args()
