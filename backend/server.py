@@ -57,7 +57,13 @@ SYSTEM_INSTRUCTION = (
     "- Gunakan tool search_web HANYA untuk: fakta terkini, jabatan/tokoh publik saat ini, "
     "cuaca, berita terbaru, atau informasi yang mungkin telah berubah setelah tahun 2024.\n"
     "- JANGAN gunakan search_web untuk: sapaan, perkenalan, lelucon, opini, definisi umum, "
-    "matematika, atau obrolan santai."
+    "matematika, atau obrolan santai.\n\n"
+    "ATURAN MENGAKHIRI PERCAKAPAN (PENTING):\n"
+    "- Jika kamu mendeteksi pengguna tidak bersuara, hening, hanya desau noise, "
+    "atau kamu memutuskan berpamitan/meminta pengguna memanggilmu lagi nanti, "
+    "berikan salam penutup ramah singkat dan WAJIB sertakan tag [END_SESSION] di paling akhir kalimatmu.\n"
+    "- Contoh: 'Sepertinya tidak ada suara. Panggil aku lagi nanti ya! [END_SESSION]'\n"
+    "- Jika pengguna berpamitan, jawab ramah dan juga sertakan tag [END_SESSION] di akhir."
 )
 
 app = FastAPI(title="R-bot Conversational Audio Pipeline")
@@ -154,6 +160,38 @@ def is_explicit_exit(text: str) -> bool:
     if core in EXIT_PHRASES:
         return True
     return False
+
+
+NOISE_OR_EMPTY_PATTERNS = {
+    "", ".", "..", "...", "…", "00:00", "[musik]", "[music]", "[tawa]",
+    "[applause]", "[suara]", "[noise]", "[hening]", "you", "thank you"
+}
+
+def is_empty_or_silence(text: str) -> bool:
+    """Detects whether STT produced empty text or hallucinated noise."""
+    if not text:
+        return True
+    raw_lower = text.lower().strip()
+    if raw_lower in NOISE_OR_EMPTY_PATTERNS:
+        return True
+    clean = re.sub(r"[^\w\s]", "", raw_lower).strip()
+    if not clean or clean in NOISE_OR_EMPTY_PATTERNS:
+        return True
+    if len(clean) <= 1:
+        return True
+    return False
+
+
+SEMANTIC_EXIT_KEYWORDS = [
+    "tanpa suara", "tidak ada suara", "hubungi aku lagi", "panggil aku lagi",
+    "sampai jumpa lagi", "sampai jumpa!", "selamat tinggal", "istirahat dulu",
+    "tidur dulu", "pamit dulu", "senang bisa membantu", "jika butuh bantuan lagi"
+]
+
+def contains_semantic_exit(bot_reply: str) -> bool:
+    """Checks if the bot's response is an implicit sign-off or notes absence of human."""
+    reply_lower = bot_reply.lower()
+    return any(keyword in reply_lower for keyword in SEMANTIC_EXIT_KEYWORDS)
 
 
 class SessionManager:
@@ -378,11 +416,9 @@ async def chat_voice(request: Request):
     t_stt = int((time.monotonic() - t_stt_0) * 1000)
     print(f"\n[STT - {stt_engine.upper()}] ({t_stt}ms): '{user_text}'")
 
-    if not user_text.strip():
-        user_text = "Halo?"
-
-    # 2. LLM (Gemini with Multi-turn Session & Explicit Exit)
+    # 2. LLM (Gemini with Multi-turn Session & Layer 1/2 Smart Exit)
     session_id = (request.headers.get("X-Session-Id") or "").strip()
+    is_silence = is_empty_or_silence(user_text)
     is_exit = is_explicit_exit(user_text)
     
     t_llm_0 = time.monotonic()
@@ -391,10 +427,30 @@ async def chat_voice(request: Request):
         bot_reply = "Sama-sama! Senang mengobrol denganmu. Sampai jumpa lagi!"
         if session_id:
             session_manager.close_session(session_id)
-        print(f"[SESSION] Explicit exit detected for session '{session_id}': action=end")
+        print(f"[SESSION] Explicit verbal exit detected for session '{session_id}': action=end")
+    elif is_silence:
+        session_action = "end"
+        bot_reply = "Sepertinya tidak ada suara. Aku istirahat dulu ya, panggil aku lagi jika butuh!"
+        if session_id:
+            session_manager.close_session(session_id)
+        print(f"[SESSION] Silence / ambient noise detected ('{user_text}') for session '{session_id}': action=end")
     else:
-        session_action = "continue"
         bot_reply = generate_llm_response(user_text, session_id=session_id)
+        
+        # Layer 2: Semantic exit from LLM (explicit [END_SESSION] tag or farewell phrasing)
+        if "[END_SESSION]" in bot_reply:
+            session_action = "end"
+            bot_reply = bot_reply.replace("[END_SESSION]", "").strip()
+            if session_id:
+                session_manager.close_session(session_id)
+            print(f"[SESSION] LLM [END_SESSION] tag detected for session '{session_id}': action=end")
+        elif contains_semantic_exit(bot_reply):
+            session_action = "end"
+            if session_id:
+                session_manager.close_session(session_id)
+            print(f"[SESSION] LLM semantic farewell phrasing detected for session '{session_id}': action=end")
+        else:
+            session_action = "continue"
 
     t_llm = int((time.monotonic() - t_llm_0) * 1000)
     print(f"[LLM - GEMINI] ({t_llm}ms) [Session: {session_id or 'none'} | Action: {session_action}]: '{bot_reply}'")
