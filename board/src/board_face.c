@@ -440,9 +440,9 @@ static void render_header(int64_t now_ms)
         }
     }
 
-    // 2. Server/Internet Globe Indicator at (X=19, Y=4) (Aligned 1px lower with Wi-Fi & Battery)
+    // 2. Server/Internet Globe Indicator at (X=19, Y=5) (Aligned with Wi-Fi & Battery)
     const int sx = 19;
-    const int sy = 4;
+    const int sy = 5;
     uint16_t scol = COL_GREEN;
     bool server_strike = false;
 
