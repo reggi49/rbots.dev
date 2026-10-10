@@ -440,45 +440,56 @@ static void render_header(int64_t now_ms)
         }
     }
 
-    // 2. Server Connection Indicator at (X=19, Y=3) (Right of Wi-Fi bar)
+    // 2. Server/Internet Globe Indicator at (X=19, Y=3) (Right of Wi-Fi bar)
     const int sx = 19;
     const int sy = 3;
     uint16_t scol = COL_GREEN;
-    uint16_t sled_col = COL_GREEN;
     bool server_strike = false;
 
     if (s_server_status == SERVER_STATUS_CONNECTED) {
-        scol = COL_CYAN;
-        sled_col = COL_GREEN;
+        scol = COL_MINT; // Clean bright mint/green when connected to server
     } else if (s_server_status == SERVER_STATUS_CONNECTING) {
-        scol = COL_DARK_GRAY;
-        sled_col = ((now_ms / 250) % 2 == 0) ? COL_YELLOW : COL_DARK_GRAY;
+        scol = ((now_ms / 250) % 2 == 0) ? COL_YELLOW : COL_DARK_GRAY; // Blinking yellow
     } else { // SERVER_STATUS_DISCONNECTED
         scol = COL_DARK_GRAY;
-        sled_col = COL_DARK_GRAY;
         server_strike = true;
     }
 
-    // Server Chassis: Stacked dual rack trays (9x7 px)
-    // Top Tray (Width 9, Height 3)
-    fb_fill_rect(sx, sy, 9, 1, scol);             // Top border
-    fb_fill_rect(sx, sy + 2, 9, 1, scol);         // Bottom border
-    fb_fill_rect(sx, sy, 1, 3, scol);             // Left border
-    fb_fill_rect(sx + 8, sy, 1, 3, scol);         // Right border
-    fb_fill_rect(sx + 5, sy + 1, 2, 1, sled_col); // Top Tray LED
+    // Globe / Earth Icon (9x9 bitmap):
+    // A crisp round sphere with equator and meridian line
+    // Row 0: . . * * * * * . .  (sy + 0)
+    // Row 1: . * . . * . . * .  (sy + 1)
+    // Row 2: * . . . * . . . *  (sy + 2)
+    // Row 3: * . . . * . . . *  (sy + 3)
+    // Row 4: * * * * * * * * *  (sy + 4, equator)
+    // Row 5: * . . . * . . . *  (sy + 5)
+    // Row 6: * . . . * . . . *  (sy + 6)
+    // Row 7: . * . . * . . * .  (sy + 7)
+    // Row 8: . . * * * * * . .  (sy + 8)
+    static const uint16_t globe_bitmap[9] = {
+        0b001111100, // ..*****..
+        0b010010010, // .*..*..*.
+        0b100010001, // *...*...*
+        0b100010001, // *...*...*
+        0b111111111, // ********* (equator)
+        0b100010001, // *...*...*
+        0b100010001, // *...*...*
+        0b010010010, // .*..*..*.
+        0b001111100  // ..*****..
+    };
 
-    // Central interconnect link
-    fb_fill_rect(sx + 3, sy + 3, 3, 1, scol);
-
-    // Bottom Tray (Width 9, Height 3)
-    fb_fill_rect(sx, sy + 4, 9, 1, scol);         // Top border
-    fb_fill_rect(sx, sy + 6, 9, 1, scol);         // Bottom border
-    fb_fill_rect(sx, sy + 4, 1, 3, scol);         // Left border
-    fb_fill_rect(sx + 8, sy + 4, 1, 3, scol);     // Right border
-    fb_fill_rect(sx + 5, sy + 5, 2, 1, sled_col); // Bottom Tray LED
+    for (int r = 0; r < 9; r++) {
+        uint16_t row_bits = globe_bitmap[r];
+        for (int c = 0; c < 9; c++) {
+            if (row_bits & (1 << (8 - c))) {
+                fb_set_pixel(sx + c, sy + r, scol);
+            }
+        }
+    }
 
     if (server_strike) {
-        for (int i = 0; i < 8; i++) {
+        // Red diagonal strike line across the globe (top-left to bottom-right)
+        for (int i = 0; i < 9; i++) {
             fb_set_pixel(sx + i, sy + i, COL_ERROR);
         }
     }
