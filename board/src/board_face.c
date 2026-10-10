@@ -53,6 +53,7 @@ static volatile face_error_type_t s_error_type = FACE_ERR_NONE;
 static char s_custom_status[32] = {0};
 static char s_error_msg[24] = {0};
 static volatile wifi_status_t s_wifi_status = WIFI_CONNECTING;
+static volatile server_status_t s_server_status = SERVER_STATUS_DISCONNECTED;
 static volatile battery_state_t s_bat_state = BAT_FULL;
 static volatile float s_audio_level_in = 0.0f;
 
@@ -439,7 +440,50 @@ static void render_header(int64_t now_ms)
         }
     }
 
-    // 2. Battery Indicator at (X=104, Y=3)
+    // 2. Server Connection Indicator at (X=19, Y=3) (Right of Wi-Fi bar)
+    const int sx = 19;
+    const int sy = 3;
+    uint16_t scol = COL_GREEN;
+    uint16_t sled_col = COL_GREEN;
+    bool server_strike = false;
+
+    if (s_server_status == SERVER_STATUS_CONNECTED) {
+        scol = COL_CYAN;
+        sled_col = COL_GREEN;
+    } else if (s_server_status == SERVER_STATUS_CONNECTING) {
+        scol = COL_DARK_GRAY;
+        sled_col = ((now_ms / 250) % 2 == 0) ? COL_YELLOW : COL_DARK_GRAY;
+    } else { // SERVER_STATUS_DISCONNECTED
+        scol = COL_DARK_GRAY;
+        sled_col = COL_DARK_GRAY;
+        server_strike = true;
+    }
+
+    // Server Chassis: Stacked dual rack trays (9x7 px)
+    // Top Tray (Width 9, Height 3)
+    fb_fill_rect(sx, sy, 9, 1, scol);             // Top border
+    fb_fill_rect(sx, sy + 2, 9, 1, scol);         // Bottom border
+    fb_fill_rect(sx, sy, 1, 3, scol);             // Left border
+    fb_fill_rect(sx + 8, sy, 1, 3, scol);         // Right border
+    fb_fill_rect(sx + 5, sy + 1, 2, 1, sled_col); // Top Tray LED
+
+    // Central interconnect link
+    fb_fill_rect(sx + 3, sy + 3, 3, 1, scol);
+
+    // Bottom Tray (Width 9, Height 3)
+    fb_fill_rect(sx, sy + 4, 9, 1, scol);         // Top border
+    fb_fill_rect(sx, sy + 6, 9, 1, scol);         // Bottom border
+    fb_fill_rect(sx, sy + 4, 1, 3, scol);         // Left border
+    fb_fill_rect(sx + 8, sy + 4, 1, 3, scol);     // Right border
+    fb_fill_rect(sx + 5, sy + 5, 2, 1, sled_col); // Bottom Tray LED
+
+    if (server_strike) {
+        for (int i = 0; i < 8; i++) {
+            fb_set_pixel(sx + i, sy + i, COL_ERROR);
+        }
+    }
+
+    // 3. Battery Indicator at (X=104, Y=3)
     const int bx = 104;
     const int by = 3;
     uint16_t bcol = COL_GREEN;
@@ -1640,6 +1684,16 @@ void board_face_set_wifi_status(wifi_status_t status)
                (prev == WIFI_OFF || prev == WIFI_ERROR || s_current_state == FACE_DISCONNECTED)) {
         board_face_trigger_happy(1200);
     }
+}
+
+void board_face_set_server_status(server_status_t status)
+{
+    s_server_status = status;
+}
+
+server_status_t board_face_get_server_status(void)
+{
+    return s_server_status;
 }
 
 void board_face_set_battery_state(battery_state_t bat)

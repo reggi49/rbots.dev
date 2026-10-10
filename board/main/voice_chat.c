@@ -93,6 +93,7 @@ static inline int16_t inmp441_to_pcm16(int32_t raw_sample)
 esp_err_t voice_chat_init(void)
 {
     ESP_LOGI(TAG_VC, "Voice chat module initialized (URL: %s)", s_backend_url);
+    board_face_set_server_status(SERVER_STATUS_CONNECTING);
     return ESP_OK;
 }
 
@@ -496,6 +497,7 @@ esp_err_t voice_chat_execute_turn(uint32_t speech_start_timeout_ms,
         esp_http_client_cleanup(client);
         free(buf);
         board_face_set_error(FACE_ERR_SERVER, "CONN FAIL");
+        board_face_set_server_status(SERVER_STATUS_DISCONNECTED);
         return err;
     }
 
@@ -531,8 +533,11 @@ esp_err_t voice_chat_execute_turn(uint32_t speech_start_timeout_ms,
         esp_http_client_close(client);
         esp_http_client_cleanup(client);
         board_face_set_error(FACE_ERR_SERVER, "SERVER ERR");
+        board_face_set_server_status(SERVER_STATUS_DISCONNECTED);
         return ESP_FAIL;
     }
+
+    board_face_set_server_status(SERVER_STATUS_CONNECTED);
 
     // Check if backend signaled session closure (explicit verbal exit)
     bool is_session_end = resp_meta.is_session_end;
@@ -605,4 +610,40 @@ esp_err_t voice_chat_trigger_turn(uint32_t duration_sec, rbot_trigger_t trigger)
     (void)duration_sec;
     rbot_turn_result_t res;
     return voice_chat_execute_turn(RBOT_SPEECH_START_TIMEOUT_INITIAL_MS, "legacy_turn", 1, trigger, &res);
+}
+
+esp_err_t voice_chat_check_server_health(void)
+{
+    char health_url[160];
+    char *p = strstr(s_backend_url, "/chat/voice");
+    if (p) {
+        size_t base_len = p - s_backend_url;
+        snprintf(health_url, sizeof(health_url), "%.*s/health", (int)base_len, s_backend_url);
+    } else {
+        snprintf(health_url, sizeof(health_url), "%s/health", s_backend_url);
+    }
+
+    esp_http_client_config_t cfg = {
+        .url = health_url,
+        .method = HTTP_METHOD_GET,
+        .timeout_ms = 1500,
+    };
+    esp_http_client_handle_t client = esp_http_client_init(&cfg);
+    if (!client) {
+        board_face_set_server_status(SERVER_STATUS_DISCONNECTED);
+        return ESP_FAIL;
+    }
+
+    esp_err_t err = esp_http_client_perform(client);
+    if (err == ESP_OK) {
+        int sc = esp_http_client_get_status_code(client);
+        if (sc == 200) {
+            board_face_set_server_status(SERVER_STATUS_CONNECTED);
+            esp_http_client_cleanup(client);
+            return ESP_OK;
+        }
+    }
+    board_face_set_server_status(SERVER_STATUS_DISCONNECTED);
+    esp_http_client_cleanup(client);
+    return ESP_FAIL;
 }

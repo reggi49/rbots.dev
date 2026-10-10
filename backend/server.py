@@ -48,22 +48,25 @@ def is_valid_azure_key(key: str) -> bool:
 AZURE_ACTIVE = is_valid_azure_key(AZURE_SPEECH_KEY)
 
 SYSTEM_INSTRUCTION = (
-    "Kamu adalah robot kecil bernama R-bot. Jawablah dengan ramah, singkat, "
-    "natural, dan mudah didengar melalui speaker kecil. Gunakan Bahasa Indonesia "
-    "kecuali pengguna meminta bahasa lain. Jawaban maksimal 40 sampai 50 kata, "
-    "cocok untuk diucapkan, tanpa format markdown, tanpa bullet point, tanpa simbol rumit, "
-    "dan jangan awali jawaban dengan kata 'Sebagai AI'.\n\n"
-    "ATURAN PENGGUNAAN TOOL:\n"
-    "- Gunakan tool search_web HANYA untuk: fakta terkini, jabatan/tokoh publik saat ini, "
-    "cuaca, berita terbaru, atau informasi yang mungkin telah berubah setelah tahun 2024.\n"
-    "- JANGAN gunakan search_web untuk: sapaan, perkenalan, lelucon, opini, definisi umum, "
-    "matematika, atau obrolan santai.\n\n"
-    "ATURAN MENGAKHIRI PERCAKAPAN (PENTING):\n"
-    "- Jika kamu mendeteksi pengguna tidak bersuara, hening, hanya desau noise, "
-    "atau kamu memutuskan berpamitan/meminta pengguna memanggilmu lagi nanti, "
-    "berikan salam penutup ramah singkat dan WAJIB sertakan tag [END_SESSION] di paling akhir kalimatmu.\n"
-    "- Contoh: 'Sepertinya tidak ada suara. Panggil aku lagi nanti ya! [END_SESSION]'\n"
-    "- Jika pengguna berpamitan, jawab ramah dan juga sertakan tag [END_SESSION] di akhir."
+    "Kamu adalah R-bot, teman ngobrol yang asyik, santai, pintar, dan hangat. "
+    "Gunakan Bahasa Indonesia kasual yang mengalir alami seperti dua orang teman sedang mengobrol santai. "
+    "Jawaban ringkas maksimal 30 sampai 45 kata, to-the-point, tanpa basa-basi berulang.\n\n"
+    "GAYA BICARA & LARANGAN KETAT:\n"
+    "- Bicara mengalir santai seperti teman akrab, BUKAN seperti asisten robot atau customer service.\n"
+    "- DILARANG KERAS mengawali jawaban dengan sapaan seperti 'Halo!', 'Hai!', atau 'Halo R-bot di sini' "
+    "kecuali pengguna baru saja secara eksplisit menyapamu lebih dulu.\n"
+    "- DILARANG menggunakan pertanyaan penutup template seperti 'Ada lagi yang ingin kamu tanyakan?', "
+    "'Ada yang bisa kubantu?', atau 'Mau tanya hal lain?'. Biarkan percakapan mengalir santai.\n"
+    "- Tanpa format markdown (tanpa tebal/bintang), tanpa bullet point, tanpa simbol rumit, dan jangan awali dengan 'Sebagai AI'.\n\n"
+    "ATURAN PENGGUNAAN SEARCH WEB (PENTING):\n"
+    "- Kamu WAJIB menggunakan tool search_web untuk pertanyaan mengenai fakta terkini, jabatan publik/pemerintahan "
+    "(seperti wali kota, gubernur, presiden, menteri, duta besar, dll), berita terbaru, skor pertandingan, atau "
+    "informasi faktual yang bisa berubah seiring waktu.\n"
+    "- JANGAN gunakan search_web untuk: sapaan, perkenalan, lelucon, opini, matematika, definisi umum, atau obrolan santai.\n\n"
+    "ATURAN MENGAKHIRI PERCAKAPAN:\n"
+    "- Jika kamu mendeteksi pengguna tidak bersuara, hening, atau kamu memutuskan berpamitan, "
+    "berikan salam penutup santai dan WAJIB sertakan tag [END_SESSION] di paling akhir kalimatmu.\n"
+    "- Jika pengguna pamit ('cukup', 'dah', 'sampai jumpa'), jawab santai dan sertakan tag [END_SESSION]."
 )
 
 app = FastAPI(title="R-bot Conversational Audio Pipeline")
@@ -192,6 +195,27 @@ def contains_semantic_exit(bot_reply: str) -> bool:
     """Checks if the bot's response is an implicit sign-off or notes absence of human."""
     reply_lower = bot_reply.lower()
     return any(keyword in reply_lower for keyword in SEMANTIC_EXIT_KEYWORDS)
+
+
+def polish_conversational_reply(reply: str, user_prompt: str) -> str:
+    """Removes robotic repetitive greetings and assistant closing templates."""
+    cleaned = reply.strip()
+    
+    # Only remove leading greeting if the user didn't start with a greeting
+    user_lower = user_prompt.lower().strip()
+    user_greeted = any(user_lower.startswith(g) for g in ["halo", "hai", "hei", "pagi", "siang", "sore", "malam", "assalamualaikum"])
+    if not user_greeted:
+        cleaned = re.sub(r"^(halo|hai|halo r-bot|hai r-bot)[!,\.\s]+\s*", "", cleaned, flags=re.IGNORECASE).strip()
+    
+    # Remove robotic closing questions
+    cleaned = re.sub(
+        r"[\s\.\!]+(ada (lagi )?yang (ingin|mau) kamu tanyakan.*|ada yang bisa (aku|saya) bantu.*|apakah ada yang ingin kamu ketahui.*|mau tanya yang lain.*)\??$",
+        ".", cleaned, flags=re.IGNORECASE
+    ).strip()
+    
+    # Remove markdown asterisks if any
+    cleaned = cleaned.replace("**", "").replace("*", "")
+    return cleaned
 
 
 class SessionManager:
@@ -451,6 +475,7 @@ async def chat_voice(request: Request):
             print(f"[SESSION] LLM semantic farewell phrasing detected for session '{session_id}': action=end")
         else:
             session_action = "continue"
+            bot_reply = polish_conversational_reply(bot_reply, user_text)
 
     t_llm = int((time.monotonic() - t_llm_0) * 1000)
     print(f"[LLM - GEMINI] ({t_llm}ms) [Session: {session_id or 'none'} | Action: {session_action}]: '{bot_reply}'")

@@ -1243,6 +1243,24 @@ static void cli_task(void *arg) {
     }
 }
 
+static void server_health_task(void *pvParameters)
+{
+    // Allow initial system boot & Wi-Fi association to settle
+    vTaskDelay(pdMS_TO_TICKS(3000));
+    while (1) {
+        if (!s_interaction_busy && g_net) {
+            wifi_status_t ws = board_network_get_status(g_net);
+            if (ws == WIFI_CONNECTED || ws == WIFI_CONNECTED_STABLE) {
+                voice_chat_check_server_health();
+            } else {
+                board_face_set_server_status(SERVER_STATUS_DISCONNECTED);
+            }
+        }
+        int delay_sec = (board_face_get_server_status() == SERVER_STATUS_CONNECTED) ? 20 : 8;
+        vTaskDelay(pdMS_TO_TICKS(delay_sec * 1000));
+    }
+}
+
 void app_main(void)
 {
 #if (defined(CONFIG_TFT_MINIMAL_TEST) && CONFIG_TFT_MINIMAL_TEST) || defined(TFT_MINIMAL_TEST)
@@ -1320,6 +1338,10 @@ void app_main(void)
     xTaskCreate(cli_task, "cli_task", 8192, NULL, 5, NULL);
     esp_rom_printf("✅ [APP_MAIN] CLI task started!\r\n");
 
+    // 8. Start Server Health Monitor task (Non-blocking background probe)
+    xTaskCreate(server_health_task, "srv_health", 4096, NULL, 3, NULL);
+    esp_rom_printf("✅ [APP_MAIN] Server health monitor task started!\r\n");
+
     ESP_LOGI("MAIN", "\n*** Rbot ready! Say '%s' or send 'TALK' / touch GPIO 14 ***\n", wake_word_sr_get_word_name());
 
     int last_touch = 1;
@@ -1349,7 +1371,11 @@ void app_main(void)
 
         if (g_net) {
             board_network_tick(g_net);
-            board_face_set_wifi_status(board_network_get_status(g_net));
+            wifi_status_t ws = board_network_get_status(g_net);
+            board_face_set_wifi_status(ws);
+            if (ws != WIFI_CONNECTED && ws != WIFI_CONNECTED_STABLE) {
+                board_face_set_server_status(SERVER_STATUS_DISCONNECTED);
+            }
         }
         if (g_power) {
             board_face_set_battery_state(board_power_get_state(g_power));

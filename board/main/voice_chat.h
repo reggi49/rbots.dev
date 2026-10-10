@@ -73,3 +73,8 @@ void voice_chat_close_backend_session(const char *session_id);
  */
 void voice_chat_signal_button_pressed(void);
 bool voice_chat_consume_button_pressed(void);
+
+/**
+ * @brief Probe backend /health endpoint to update server connection icon
+ */
+esp_err_t voice_chat_check_server_health(void);

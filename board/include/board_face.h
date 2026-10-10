@@ -22,6 +22,13 @@ typedef enum {
     FACE_ERR_GENERIC
 } face_error_type_t;
 
+// Server Connection Status
+typedef enum {
+    SERVER_STATUS_DISCONNECTED = 0,
+    SERVER_STATUS_CONNECTING,
+    SERVER_STATUS_CONNECTED
+} server_status_t;
+
 // Five Eye Shape Families
 typedef enum {
     EYE_SHAPE_ROUNDED = 0, // Rounded rectangle with corner radius
@@ -161,6 +168,16 @@ void board_face_set_audio_level(float level);
  * @brief Update WiFi connection status for top-bar indicator
  */
 void board_face_set_wifi_status(wifi_status_t status);
+
+/**
+ * @brief Update Server connection status for top-bar indicator (right of WiFi bar)
+ */
+void board_face_set_server_status(server_status_t status);
+
+/**
+ * @brief Get current Server connection status
+ */
+server_status_t board_face_get_server_status(void);
 
 /**
  * @brief Update Battery level for top-bar indicator
