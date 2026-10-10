@@ -414,9 +414,9 @@ static void fb_render_eye(const eye_params_t *eye, float blink_factor)
 // -------------------------------------------------------------
 static void render_header(int64_t now_ms)
 {
-    // 1. Wi-Fi Indicator at (X=4, Y=17) (Shifted down ~1cm from bezel)
+    // 1. Wi-Fi Indicator at (X=4, Y=3)
     const int wx = 4;
-    const int wy = 17;
+    const int wy = 3;
     uint16_t wcol = COL_GREEN;
     bool draw_strike = false;
 
@@ -440,9 +440,9 @@ static void render_header(int64_t now_ms)
         }
     }
 
-    // 2. Server/Internet Globe Indicator at (X=19, Y=17) (Shifted down ~1cm from bezel)
+    // 2. Server/Internet Globe Indicator at (X=19, Y=4) (Aligned 1px lower with Wi-Fi & Battery)
     const int sx = 19;
-    const int sy = 17;
+    const int sy = 4;
     uint16_t scol = COL_GREEN;
     bool server_strike = false;
 
@@ -494,9 +494,9 @@ static void render_header(int64_t now_ms)
         }
     }
 
-    // 3. Battery Indicator at (X=104, Y=17) (Shifted down ~1cm from bezel)
+    // 3. Battery Indicator at (X=104, Y=3)
     const int bx = 104;
-    const int by = 17;
+    const int by = 3;
     uint16_t bcol = COL_GREEN;
     int bars = 3;
 
