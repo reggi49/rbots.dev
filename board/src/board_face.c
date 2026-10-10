@@ -414,9 +414,9 @@ static void fb_render_eye(const eye_params_t *eye, float blink_factor)
 // -------------------------------------------------------------
 static void render_header(int64_t now_ms)
 {
-    // 1. Wi-Fi Indicator at (X=4, Y=3)
+    // 1. Wi-Fi Indicator at (X=4, Y=17) (Shifted down ~1cm from bezel)
     const int wx = 4;
-    const int wy = 3;
+    const int wy = 17;
     uint16_t wcol = COL_GREEN;
     bool draw_strike = false;
 
@@ -440,9 +440,9 @@ static void render_header(int64_t now_ms)
         }
     }
 
-    // 2. Server/Internet Globe Indicator at (X=19, Y=3) (Right of Wi-Fi bar)
+    // 2. Server/Internet Globe Indicator at (X=19, Y=17) (Shifted down ~1cm from bezel)
     const int sx = 19;
-    const int sy = 3;
+    const int sy = 17;
     uint16_t scol = COL_GREEN;
     bool server_strike = false;
 
@@ -494,9 +494,9 @@ static void render_header(int64_t now_ms)
         }
     }
 
-    // 3. Battery Indicator at (X=104, Y=3)
+    // 3. Battery Indicator at (X=104, Y=17) (Shifted down ~1cm from bezel)
     const int bx = 104;
-    const int by = 3;
+    const int by = 17;
     uint16_t bcol = COL_GREEN;
     int bars = 3;
 
@@ -1442,6 +1442,19 @@ static void face_task(void *arg)
 
         // 6. Render Minimal Status Banner
         render_status_banner();
+
+        // 6b. Sleepy Screen Dimming (Redupkan layar 50% jika SLEEPY, wake word tetap aktif)
+        if (s_is_sleepy) {
+            for (int px = 0; px < SCREEN_W * SCREEN_H; px++) {
+                uint16_t c = s_framebuf[px];
+                if (c != 0) {
+                    uint16_t r = (c >> 11) & 0x1F;
+                    uint16_t g = (c >> 5) & 0x3F;
+                    uint16_t b = c & 0x1F;
+                    s_framebuf[px] = ((r >> 1) << 11) | ((g >> 1) << 5) | (b >> 1);
+                }
+            }
+        }
 
         // 7. Blast frame buffer over SPI DMA to ST7735 in one single burst
         if (s_disp) {
