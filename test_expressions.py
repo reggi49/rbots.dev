@@ -20,23 +20,26 @@ import serial
 BAUD = 115200
 
 EXPRESSIONS = [
-    ("IDLE", "1. Standby / Siap (Mata cyan ramah, kedip berkala)"),
-    ("LISTEN", "2. Listening (Mata membesar, fokus mendengarkan user)"),
-    ("THINK", "3. Thinking (Mata melirik ke atas-kanan/kiri + partikel orbit kuning)"),
-    ("SPEAK", "4. Speaking (Mata aktif + gelombang audio modulasi di mulut)"),
-    ("HAPPY", "5. Happy Soft (Senyum kecil + mata lembut setelah menjawab)"),
-    ("HAPPY_BIG", "6. Happy Big (Mata busur bulan sabit gembira + senyum)"),
-    ("CURIOUS_L", "7. Curious Kiri (Mata kiri membesar + alis miring quizzical)"),
-    ("CURIOUS_R", "8. Curious Kanan (Mata kanan membesar + melirik)"),
-    ("EXCITED", "9. Excited (Mata melonjong antusias, animasi squash & stretch)"),
-    ("SURPRISE", "10. Surprised (Mata membulat tinggi terkejut)"),
-    ("CONFUSED", "11. Confused (Alis mengernyit ragu / bingung)"),
-    ("WINK_L", "12. Kedip Kiri (Playful wink mata kiri)"),
-    ("WINK_R", "13. Kedip Kanan (Playful wink mata kanan)"),
-    ("SLEEP", "14. Sleepy / Mengantuk (Kelopak mata turun 60% + layar redup 50%)"),
-    ("ERR", "15. Error Sad (Mata merah murung melengkung ke bawah)"),
-    ("OFFLINE", "16. Offline / Disconnected (Mata oranye redup tanpa koneksi)"),
-    ("BOOT", "17. Booting (Animasi mata terbuka pertama kali)"),
+    ("EXCITED", "1. EXCITED (Panel 1: Sunburst rays, paws raised high, sparkling eyes)"),
+    ("SURPRISE", "2. SURPRISED (Panel 2: Floating '!!!', wide round eyes, paws at cheeks)"),
+    ("SQUINT", "3. SQUINT (Panel 3: Candy & stars, left wink, sweet cat smile)"),
+    ("WINK_L", "4. WINK L (Panel 4: Mint/sky gradient, left eye wink, happy open mouth)"),
+    ("WINK_R", "5. WINK R (Panel 5: Peach gradient, right eye wink, open smile)"),
+    ("CONFUSED", "6. CONFUSED (Panel 6: Lavender, '???', asymmetric gaze, paw at chin)"),
+    ("SLEEP", "7. SLEEPY (Panel 7: Midnight indigo, crescent moon, 'zzz', pink pillow)"),
+    ("SAD", "8. ERROR SAD (Panel 8: Crimson rose, broken heart, sad tears, quivering pout)"),
+    ("HAPPY", "9. HAPPY (Panel 9: Vibrant pink, floating hearts, joyful crescent eyes)"),
+    ("RECOVERED", "10. RECOVERED (Panel 10: Spring green leaves, sunny smile, calm eyes)"),
+    ("NEUTRAL", "11. NEUTRAL (Peaceful open sparkling eyes, ':3' smile, gentle breathing)"),
+    ("LISTEN", "12. LISTENING (Attentive eyes, cyan acoustic soundwaves from headphones)"),
+    ("THINK", "13. THINKING (Gazing up-right, rotating orbital thought sparkles)"),
+    ("SPEAK", "14. SPEAKING (Dynamic feline mouth modulated with audio level)"),
+    ("BLINK", "15. BLINK (Natural smooth eyelid closure and reopen)"),
+    ("CURIOUS", "16. CURIOUS (Tilted head illusion, asymmetric eyes, inquisitive)"),
+    ("ANGRY", "17. ANGRY (Slanted brows, downward grimace with corner teeth, anger mark)"),
+    ("LOVE", "18. LOVE (Heart pupils, floating hearts, glowing rosy blush)"),
+    ("PLAYFUL", "19. PLAYFUL (Wink, cute tongue blep :P, paw waving)"),
+    ("ERR", "20. ERROR (Concerned expression, broken heart, server error)"),
 ]
 
 
@@ -69,17 +72,18 @@ def send_command(s, cmd):
     time.sleep(0.05)
 
 
-def wait_for_ready(s, timeout=5.0):
+def wait_for_ready(s, timeout=12.0):
     t0 = time.time()
     last_ping = 0.0
     while time.time() - t0 < timeout:
-        if time.time() - last_ping > 0.8:
+        if time.time() - last_ping > 0.5:
             s.write(b"PING\r\n")
             s.flush()
             last_ping = time.time()
         line = s.readline().decode(errors="replace").strip()
         if "PONG" in line:
             return True
+        time.sleep(0.05)
     return False
 
 
@@ -138,3 +142,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

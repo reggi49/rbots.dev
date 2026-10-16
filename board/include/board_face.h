@@ -122,6 +122,36 @@ void board_face_trigger_happy(uint32_t duration_ms);
 void board_face_trigger_happy_big(uint32_t duration_ms);
 
 /**
+ * @brief Trigger squint expression (candy & wink)
+ */
+void board_face_trigger_squint(uint32_t duration_ms);
+
+/**
+ * @brief Trigger recovered expression (spring green leaves & smile)
+ */
+void board_face_trigger_recovered(uint32_t duration_ms);
+
+/**
+ * @brief Trigger love expression (heart pupils & floating hearts)
+ */
+void board_face_trigger_love(uint32_t duration_ms);
+
+/**
+ * @brief Trigger angry / frustrated expression
+ */
+void board_face_trigger_angry(uint32_t duration_ms);
+
+/**
+ * @brief Trigger playful expression (wink + tongue blep)
+ */
+void board_face_trigger_playful(uint32_t duration_ms);
+
+/**
+ * @brief Trigger sad expression
+ */
+void board_face_trigger_sad(uint32_t duration_ms);
+
+/**
  * @brief Trigger curious pose (with controlled asymmetry)
  * @param left_larger If true, left eye is enlarged; if false, right eye is enlarged
  * @param duration_ms Duration to hold curious pose
@@ -153,6 +183,22 @@ void board_face_trigger_wink(bool left_eye, uint32_t duration_ms);
  * @brief Trigger sleepy expression
  */
 void board_face_trigger_sleepy(void);
+
+/**
+ * @brief Trigger any expression for a specified duration in ms
+ */
+void board_face_trigger_expression(face_state_t exp, uint32_t duration_ms);
+
+/**
+ * @brief Kawaii Cat UI Convenience API
+ */
+void cat_set_expression(face_state_t expression);
+void cat_update(void);
+void cat_set_speaking(bool enabled);
+void cat_set_listening(bool enabled);
+void cat_set_thinking(bool enabled);
+void cat_set_battery_level(battery_state_t level);
+void cat_set_connection_state(wifi_status_t state);
 
 /**
  * @brief Update bottom status text manually
