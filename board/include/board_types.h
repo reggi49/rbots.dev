@@ -25,7 +25,10 @@ typedef enum {
     FACE_RECOVERED,     // 10. Recovered (Green leaves, sunny smile, relaxed)
     FACE_NEUTRAL,       // 11. Neutral (Relaxed open eyes, soft smile, breathing)
     FACE_BLINK,         // 15. Blink
-    FACE_CURIOUS,       // 16. Curious (Asymmetric eyes, curious tilt)
+    FACE_CURIOUS,       // 16. Curious
+    FACE_CURIOUS_L = FACE_CURIOUS, // Curious looking left
+    FACE_CURIOUS_R,     // Curious looking right
+    FACE_HAPPY_BIG,     // Squeezed eyes (^ ^), wide joyful mouth, strong blush
     FACE_ANGRY,         // 17. Angry / Frustrated (Slanted brows, frown, anger mark)
     FACE_LOVE,          // 18. Love (Heart pupils, floating hearts, glowing blush)
     FACE_PLAYFUL,       // 19. Playful (Wink + tongue blep, paw wave)

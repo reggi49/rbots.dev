@@ -8,16 +8,27 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-lock.yaml
 
-# React Native / Metro
-.expo/
-.expo-shared/
-android/app/build/
-android/build/
-android/.gradle/
-ios/Pods/
-ios/build/
+# Gradle & Native
+**/.gradle/
+**/android/app/build/
+**/android/build/
+**/ios/Pods/
+**/ios/build/
 *.keystore
 *.jks
+
+# Flutter / Dart
+**/.dart_tool/
+**/.flutter-plugins-dependencies
+**/.flutter-plugins
+**/.pub-cache/
+**/.pub/
+**/build/
+**/ephemeral/
+**/Generated.xcconfig
+**/flutter_export_environment.sh
+app.*.symbols
+app.*.map.json
 
 # Xcode
 *.xcworkspace

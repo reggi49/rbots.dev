@@ -23,35 +23,66 @@ static const char *TAG_FACE = "BD_FACE";
 #define SCREEN_H 160
 
 // -------------------------------------------------------------
-// Official Kawaii Robot Cat Palette (Big-Endian for SPI DMA)
+// Premium Kawaii 3D Cat Palette — warm pastels, pseudo-3D depth
+// Big-Endian for SPI DMA (ST7735 expects MSB first)
+// Light source: upper-left
 // -------------------------------------------------------------
 #define RGB565_BE(r, g, b) (__builtin_bswap16(((uint16_t)((r) & 0xF8) << 8) | \
                                               ((uint16_t)((g) & 0xFC) << 3) | \
                                               ((uint16_t)(b) >> 3)))
 
-#define COL_CAT_WHITE        RGB565_BE(255, 255, 255) // #FFFFFF - Main fur & white highlights
-#define COL_CAT_CREAM        RGB565_BE(255, 243, 214) // #FFF3D6 - Pastel cream body & stars
-#define COL_CAT_PINK         RGB565_BE(255, 117, 184) // #FF75B8 - Main ribbon bow & blush
-#define COL_CAT_LIGHT_PINK   RGB565_BE(255, 214, 232) // #FFD6E8 - Inner ears & soft highlights
-#define COL_CAT_DEEP_PINK    RGB565_BE(230, 40,  120) // Shading on bow & collar
-#define COL_CAT_CYAN         RGB565_BE(86,  221, 245) // #56DDF5 - Headphones & eye glow
-#define COL_CAT_SKY_BLUE     RGB565_BE(103, 168, 255) // #67A8FF - Eye iris & pastel bg
-#define COL_CAT_VIOLET       RGB565_BE(168, 139, 255) // #A88BFF - Upper eye iris & lavender
-#define COL_CAT_MINT         RGB565_BE(141, 235, 203) // #8DEBCB - Leaves & mint bg
-#define COL_CAT_DARK_NAVY    RGB565_BE(32,  36,  68)  // #202444 - Eye pupils, outlines, mouth
-#define COL_CAT_GOLD         RGB565_BE(255, 201, 74)  // #FFC94A - Golden bell & star sparkles
-#define COL_CAT_DARK_GOLD    RGB565_BE(190, 130, 20)  // Bell shading & slit
-#define COL_CAT_SHADOW       RGB565_BE(220, 214, 230) // Gentle shadow under chin & ears
-#define COL_CAT_MOUTH_RED    RGB565_BE(180, 25,  65)  // Deep mouth interior
-#define COL_CAT_TONGUE       RGB565_BE(255, 130, 170) // Soft pink cat tongue
-#define COL_CAT_PILLOW       RGB565_BE(255, 175, 210) // Sleepy cushion pillow
+// --- Fur & Body ---
+#define COL_FUR_BASE         RGB565_BE(255, 249, 242) // Warm milk white #FFF9F2
+#define COL_FUR_HIGHLIGHT    RGB565_BE(255, 255, 255) // Pure white specular
+#define COL_FUR_SHADOW       RGB565_BE(228, 218, 232) // Lavender shadow on fur
+#define COL_FUR_DEEP_SHADOW  RGB565_BE(200, 190, 210) // Deeper chin/under shadow
+#define COL_OUTLINE          RGB565_BE(81,  68,  95)  // Soft outline #51445F
 
+// --- Pink family ---
+#define COL_CHEEK_PINK       RGB565_BE(255, 184, 210) // Blush #FFB8D2
+#define COL_CHEEK_HIGHLIGHT  RGB565_BE(255, 225, 238) // Blush inner highlight
+#define COL_BOW_PINK         RGB565_BE(242, 138, 181) // Rose accent bow #F28AB5
+#define COL_BOW_HIGHLIGHT    RGB565_BE(255, 200, 220) // Bow highlight
+#define COL_BOW_SHADOW       RGB565_BE(210, 100, 140) // Bow shadow
+#define COL_EAR_INNER        RGB565_BE(255, 214, 232) // Soft inner ear pink
+#define COL_COLLAR_PINK      RGB565_BE(242, 138, 181) // Collar matches bow
+#define COL_COLLAR_SHADOW    RGB565_BE(200, 100, 130) // Collar shadow
+
+// --- Eyes ---
+#define COL_EYE_OUTER        RGB565_BE(37,  38,  79)  // Deep eye contour #25264F
+#define COL_IRIS_TOP         RGB565_BE(102, 140, 255) // Iris upper blue #668CFF
+#define COL_IRIS_BOT         RGB565_BE(142, 220, 255) // Iris lower light blue #8EDCFF
+#define COL_PUPIL            RGB565_BE(25,  25,  50)  // Dark pupil
+#define COL_EYE_HIGHLIGHT    RGB565_BE(255, 255, 255) // White highlight
+#define COL_EYE_HIGHLIGHT2   RGB565_BE(200, 220, 255) // Secondary reflection
+
+// --- Accessories ---
+#define COL_BELL_GOLD        RGB565_BE(255, 214, 110) // Bell gold #FFD66E
+#define COL_BELL_HIGHLIGHT   RGB565_BE(255, 240, 180) // Bell specular
+#define COL_BELL_SHADOW      RGB565_BE(201, 149, 67)  // Warm shadow gold #C99543
+#define COL_BELL_DARK        RGB565_BE(140, 100, 40)  // Bell slit
+
+// --- Background ---
+#define COL_BG_TOP           RGB565_BE(200, 216, 255) // Background blue top #C8D8FF
+#define COL_BG_BOT           RGB565_BE(220, 210, 245) // Background lavender bottom
+#define COL_BG_WARM          RGB565_BE(255, 242, 229) // Cream background #FFF2E5
+#define COL_SPARKLE          RGB565_BE(255, 255, 255) // Sparkle white
+#define COL_SPARKLE_SOFT     RGB565_BE(230, 225, 245) // Soft sparkle
+
+// --- Mouth ---
+#define COL_MOUTH_DARK       RGB565_BE(81,  68,  95)  // Mouth line
+#define COL_MOUTH_RED        RGB565_BE(180, 50,  80)  // Open mouth interior
+#define COL_TONGUE           RGB565_BE(255, 150, 180) // Tongue pink
+
+// --- UI / Status ---
 #define COL_BLACK            RGB565_BE(0,   0,   0)
-#define COL_GREEN            RGB565_BE(0,   255, 70)  // Full battery / Wi-Fi
-#define COL_YELLOW           RGB565_BE(255, 220, 0)
-#define COL_ERROR            RGB565_BE(255, 60,  60)  // Error coral red
-#define COL_GRAY             RGB565_BE(85,  85,  85)
-#define COL_DARK_GRAY        RGB565_BE(30,  35,  45)
+#define COL_GREEN            RGB565_BE(0,   210, 80)
+#define COL_YELLOW           RGB565_BE(255, 210, 0)
+#define COL_ERROR            RGB565_BE(240, 70,  70)
+#define COL_GRAY             RGB565_BE(100, 100, 110)
+#define COL_DARK_GRAY        RGB565_BE(50,  50,  60)
+#define COL_SHADOW_LAV       RGB565_BE(156, 139, 198) // Shadow lavender #9C8BC6
+#define COL_PILLOW           RGB565_BE(255, 195, 220) // Sleepy cushion
 
 // 40KB Framebuffer allocated in DMA-capable memory
 static uint16_t *s_framebuf = NULL;
@@ -73,6 +104,7 @@ static volatile float s_audio_level_in = 0.0f;
 static int64_t s_state_start_ms = 0;
 static int64_t s_timed_hold_until_ms = 0;
 static int64_t s_last_interaction_ms = 0;
+static int64_t s_boot_start_ms = 0;
 static bool s_is_sleepy = false;
 
 // Independent Eye Blinking State
@@ -277,6 +309,52 @@ static void fb_fill_ellipse(int cx, int cy, int rx, int ry, uint16_t col)
     }
 }
 
+// Draw just the outline of an axis-aligned ellipse (Bresenham midpoint)
+static void fb_draw_ellipse(int cx, int cy, int rx, int ry, uint16_t col)
+{
+    if (rx <= 0 || ry <= 0) return;
+    // Midpoint ellipse algorithm
+    int x = 0, y = ry;
+    long rx2 = (long)rx * rx, ry2 = (long)ry * ry;
+    long px = 0, py = 2 * rx2 * y;
+    long d;
+
+    // Region 1
+    d = (long)(ry2 - rx2 * ry + 0.25f * rx2);
+    while (px < py) {
+        fb_set_pixel(cx + x, cy + y, col);
+        fb_set_pixel(cx - x, cy + y, col);
+        fb_set_pixel(cx + x, cy - y, col);
+        fb_set_pixel(cx - x, cy - y, col);
+        x++;
+        px += 2 * ry2;
+        if (d < 0) {
+            d += ry2 + px;
+        } else {
+            y--;
+            py -= 2 * rx2;
+            d += ry2 + px - py;
+        }
+    }
+    // Region 2
+    d = (long)(ry2 * (x + 0.5f) * (x + 0.5f) + rx2 * (y - 1) * (y - 1) - rx2 * ry2);
+    while (y >= 0) {
+        fb_set_pixel(cx + x, cy + y, col);
+        fb_set_pixel(cx - x, cy + y, col);
+        fb_set_pixel(cx + x, cy - y, col);
+        fb_set_pixel(cx - x, cy - y, col);
+        y--;
+        py -= 2 * rx2;
+        if (d > 0) {
+            d += rx2 - py;
+        } else {
+            x++;
+            px += 2 * ry2;
+            d += rx2 - py + px;
+        }
+    }
+}
+
 static void fb_fill_rounded_rect(int x, int y, int w, int h, int r, uint16_t col)
 {
     if (r <= 0) {
@@ -410,6 +488,53 @@ static void fb_draw_broken_heart(int cx, int cy, uint16_t col)
     fb_draw_line(cx + 1, cy + 2, cx, cy + 6, COL_BLACK);
 }
 
+static void fb_draw_head_contour(int cx, int cy, int rx, int ry, uint16_t col)
+{
+    int x = 0;
+    int y = ry;
+    int a2 = rx * rx;
+    int b2 = ry * ry;
+    int err = b2 - (2 * ry - 1) * a2;
+    int e2;
+
+    do {
+        // Bottom points (always draw around cheeks and chin)
+        fb_set_pixel(cx + x, cy + y, col);
+        fb_set_pixel(cx - x, cy + y, col);
+
+        // Top points (skip under ear bases so ears connect cleanly)
+        int px_r = cx + x;
+        int px_l = cx - x;
+        int py_t = cy - y;
+
+        if (px_r < 79 || px_r > 105) {
+            fb_set_pixel(px_r, py_t, col);
+        }
+        if (px_l > 49 || px_l < 23) {
+            fb_set_pixel(px_l, py_t, col);
+        }
+
+        e2 = 2 * err;
+        if (e2 < (2 * x + 1) * b2) { x++; err += (2 * x + 1) * b2; }
+        if (e2 > -(2 * y - 1) * a2) { y--; err -= (2 * y - 1) * a2; }
+    } while (y >= 0);
+}
+
+static void fb_draw_sweat_drop(int cx, int cy, int size, uint16_t col)
+{
+    fb_fill_triangle(cx, cy - size, cx - size / 2, cy, cx + size / 2, cy, col);
+    fb_fill_circle(cx, cy, size / 2, col);
+    fb_set_pixel(cx - 1, cy - size / 3, COL_FUR_HIGHLIGHT);
+}
+
+static void fb_draw_anger_mark(int cx, int cy, int size, uint16_t col)
+{
+    fb_draw_thick_line(cx - size, cy - size / 2, cx + size, cy - size / 2, 2, col);
+    fb_draw_thick_line(cx - size, cy + size / 2, cx + size, cy + size / 2, 2, col);
+    fb_draw_thick_line(cx - size / 2, cy - size, cx - size / 2, cy + size, 2, col);
+    fb_draw_thick_line(cx + size / 2, cy - size, cx + size / 2, cy + size, 2, col);
+}
+
 static void fb_draw_candy(int cx, int cy, uint16_t col1, uint16_t col2)
 {
     // Candy body
@@ -435,7 +560,7 @@ static void fb_draw_question_mark(int cx, int cy, int h, uint16_t col)
 static void fb_draw_crescent_moon(int cx, int cy, int r, uint16_t col)
 {
     fb_fill_circle(cx, cy, r, col);
-    fb_fill_circle(cx + r/2, cy - r/3, r - 1, COL_CAT_DARK_NAVY);
+    fb_fill_circle(cx + r/2, cy - r/3, r - 1, COL_EYE_OUTER);
 }
 
 static void fb_draw_zzz(int x, int y, int scale, uint16_t col)
@@ -537,199 +662,132 @@ static void fb_draw_text_centered(int y, const char *txt, uint16_t col, int scal
 static void render_cat_background(face_state_t state, int64_t now_ms)
 {
     float t_sec = (float)now_ms / 1000.0f;
+    (void)t_sec; // used by some states
+
+    // --- Unified soft pastel background base ---
+    // Most states share the same gentle sky-blue to lavender gradient.
+    // Only a few states use a slightly different tint, keeping the overall
+    // visual language consistent and avoiding rainbow-chaos.
 
     switch (state) {
-        case FACE_EXCITED:
-            // Warm sunshine gradient (Yellow to Peach/Orange)
-            fb_gradient_v(0, SCREEN_H - 1, RGB565_BE(255, 235, 130), RGB565_BE(255, 160, 75));
-            // Sunburst rays radiating from center
-            for (int angle = 0; angle < 360; angle += 45) {
-                float rad = (float)angle * 3.14159f / 180.0f + t_sec * 0.4f;
-                int x1 = 64 + (int)(cosf(rad) * 90.0f);
-                int y1 = 70 + (int)(sinf(rad) * 90.0f);
-                fb_draw_line(64, 70, x1, y1, RGB565_BE(255, 245, 170));
-            }
-            // Sparkle stars
-            fb_draw_star(16, 32, 3, COL_CAT_GOLD);
-            fb_draw_star(112, 28, 4, COL_CAT_GOLD);
-            fb_draw_star(20, 120, 3, COL_CAT_CREAM);
-            fb_draw_star(108, 122, 3, COL_CAT_CREAM);
-            break;
-
-        case FACE_SURPRISED:
-            // Pastel yellow to pink gradient
-            fb_gradient_v(0, SCREEN_H - 1, RGB565_BE(255, 245, 160), RGB565_BE(255, 165, 200));
-            // Floating exclamation marks '!!!'
-            fb_draw_exclamation_mark(54, 18 + (int)(sinf(t_sec * 5.0f) * 2.0f), 8, COL_CAT_GOLD);
-            fb_draw_exclamation_mark(64, 15 + (int)(sinf(t_sec * 5.0f + 1.0f) * 2.5f), 10, COL_CAT_PINK);
-            fb_draw_exclamation_mark(74, 18 + (int)(sinf(t_sec * 5.0f + 2.0f) * 2.0f), 8, COL_CAT_GOLD);
-            fb_draw_star(18, 38, 3, COL_CAT_CREAM);
-            fb_draw_star(110, 36, 3, COL_CAT_CREAM);
-            break;
-
-        case FACE_SQUINT:
-            // Bright cyan to sky blue
-            fb_gradient_v(0, SCREEN_H - 1, RGB565_BE(86, 221, 245), RGB565_BE(170, 235, 255));
-            // Cute candies & stars
-            fb_draw_candy(64, 20, COL_CAT_PINK, COL_CAT_LIGHT_PINK);
-            fb_draw_star(22, 34, 3, COL_CAT_WHITE);
-            fb_draw_star(106, 36, 4, COL_CAT_CREAM);
-            break;
-
-        case FACE_WINK_LEFT:
-            // Mint green to sky blue
-            fb_gradient_v(0, SCREEN_H - 1, RGB565_BE(141, 235, 203), RGB565_BE(103, 168, 255));
-            fb_draw_star(16, 26, 4, COL_CAT_CREAM);
-            fb_draw_star(110, 32, 3, COL_CAT_WHITE);
-            fb_draw_star(18, 126, 3, COL_CAT_WHITE);
-            fb_draw_star(112, 124, 3, COL_CAT_CREAM);
-            break;
-
-        case FACE_WINK_RIGHT:
-            // Peach to pastel pink
-            fb_gradient_v(0, SCREEN_H - 1, RGB565_BE(255, 205, 160), RGB565_BE(255, 125, 185));
-            fb_draw_heart(20, 28, 4, COL_CAT_LIGHT_PINK);
-            fb_draw_star(108, 30, 3, COL_CAT_CREAM);
-            fb_draw_star(16, 120, 3, COL_CAT_WHITE);
-            fb_draw_heart(110, 124, 3, COL_CAT_LIGHT_PINK);
-            break;
-
-        case FACE_CONFUSED:
-            // Lavender to purple
-            fb_gradient_v(0, SCREEN_H - 1, RGB565_BE(225, 205, 255), RGB565_BE(155, 125, 250));
-            // Floating '???'
-            fb_draw_question_mark(28, 22 + (int)(sinf(t_sec * 4.0f) * 2.0f), 8, COL_CAT_WHITE);
-            fb_draw_question_mark(44, 16 + (int)(sinf(t_sec * 4.0f + 1.2f) * 2.5f), 10, COL_CAT_LIGHT_PINK);
-            fb_draw_question_mark(60, 24 + (int)(sinf(t_sec * 4.0f + 2.4f) * 2.0f), 7, COL_CAT_CREAM);
-            fb_draw_star(110, 32, 3, COL_CAT_WHITE);
-            break;
-
         case FACE_SLEEPY:
-            // Deep midnight indigo sky
-            fb_gradient_v(0, SCREEN_H - 1, RGB565_BE(18, 22, 50), RGB565_BE(36, 42, 90));
-            // Golden crescent moon
-            fb_draw_crescent_moon(26, 26, 7, COL_CAT_GOLD);
-            // Twinkling stars
-            fb_draw_star(44, 20, 2, COL_CAT_CREAM);
-            fb_draw_star(18, 46, 2, COL_CAT_WHITE);
-            fb_draw_star(60, 30, 1, COL_CAT_CREAM);
-            // Floating 'Z z z'
-            int z_off = (int)(t_sec * 12.0f) % 24;
-            fb_draw_zzz(92, 38 - z_off, 1, COL_CAT_LIGHT_PINK);
-            fb_draw_zzz(98, 28 - z_off, 2, COL_CAT_CYAN);
-            fb_draw_zzz(106, 18 - z_off, 2, COL_CAT_WHITE);
+            // Soft dark indigo for night
+            fb_gradient_v(0, SCREEN_H - 1, RGB565_BE(30, 30, 60), RGB565_BE(50, 45, 90));
+            // Crescent moon
+            fb_draw_crescent_moon(24, 22, 6, COL_BELL_GOLD);
+            // Small stars
+            fb_draw_star(50, 18, 2, COL_SPARKLE_SOFT);
+            fb_draw_star(16, 42, 1, COL_SPARKLE);
+            // Floating Z's
+            {
+                int z_off = (int)(t_sec * 10.0f) % 20;
+                fb_draw_zzz(94, 36 - z_off, 1, COL_SPARKLE_SOFT);
+                fb_draw_zzz(102, 26 - z_off, 2, COL_SPARKLE);
+            }
             break;
 
         case FACE_SAD:
         case FACE_ERROR:
-            // Crimson to dark rose wine
-            fb_gradient_v(0, SCREEN_H - 1, RGB565_BE(95, 18, 38), RGB565_BE(40, 8, 16));
-            // Floating broken heart
-            fb_draw_broken_heart(64, 20 + (int)(sinf(t_sec * 3.0f) * 2.0f), COL_CAT_PINK);
-            // Soft falling tear accents
-            fb_fill_circle(20, 40 + ((int)(now_ms / 30) % 80), 1, COL_CAT_CYAN);
-            fb_fill_circle(108, 30 + ((int)(now_ms / 25) % 80), 1, COL_CAT_CYAN);
+            // Muted dusty rose — sad but not alarming
+            fb_gradient_v(0, SCREEN_H - 1, RGB565_BE(180, 160, 190), RGB565_BE(140, 120, 155));
+            // Single small broken heart accent
+            fb_draw_broken_heart(64, 20 + (int)(sinf(t_sec * 2.5f) * 1.5f), COL_BOW_PINK);
+            break;
+
+        case FACE_ANGRY:
+            // Warm dark rose
+            fb_gradient_v(0, SCREEN_H - 1, RGB565_BE(200, 130, 140), RGB565_BE(160, 90, 100));
+            // Small anger cross mark
+            fb_draw_line(102, 18, 110, 18, COL_FUR_HIGHLIGHT);
+            fb_draw_line(106, 14, 106, 22, COL_FUR_HIGHLIGHT);
+            break;
+
+        case FACE_LOVE:
+            // Soft warm pink
+            fb_gradient_v(0, SCREEN_H - 1, RGB565_BE(255, 210, 225), RGB565_BE(240, 180, 210));
+            // Floating hearts
+            fb_draw_heart(20, 24 + (int)(sinf(t_sec * 3.0f) * 2.0f), 4, COL_SPARKLE);
+            fb_draw_heart(108, 28 + (int)(sinf(t_sec * 3.0f + 2.0f) * 2.0f), 3, COL_BOW_HIGHLIGHT);
             break;
 
         case FACE_HAPPY:
-            // Vibrant bright pink gradient
-            fb_gradient_v(0, SCREEN_H - 1, RGB565_BE(255, 150, 200), RGB565_BE(255, 80, 150));
-            // Floating hearts
-            fb_draw_heart(24, 26 + (int)(sinf(t_sec * 4.0f) * 2.0f), 4, COL_CAT_WHITE);
-            fb_draw_heart(64, 18 + (int)(sinf(t_sec * 4.0f + 1.5f) * 2.5f), 5, COL_CAT_LIGHT_PINK);
-            fb_draw_heart(104, 28 + (int)(sinf(t_sec * 4.0f + 3.0f) * 2.0f), 4, COL_CAT_WHITE);
-            break;
-
+        case FACE_HAPPY_BIG:
+        case FACE_EXCITED:
         case FACE_RECOVERED:
-            // Morning sky blue to fresh mint
-            fb_gradient_v(0, SCREEN_H - 1, RGB565_BE(100, 195, 255), RGB565_BE(141, 235, 203));
-            // Sunburst sparkles
-            fb_draw_star(16, 28, 4, COL_CAT_GOLD);
-            fb_draw_star(64, 18, 3, COL_CAT_CREAM);
-            fb_draw_star(112, 30, 4, COL_CAT_WHITE);
-            // Green foliage sprouts at bottom sides
-            fb_draw_leaf(12, 130, 8, 5, RGB565_BE(40, 180, 110));
-            fb_draw_leaf(22, 134, 6, 4, RGB565_BE(70, 210, 130));
-            fb_draw_leaf(116, 130, 8, 5, RGB565_BE(40, 180, 110));
-            fb_draw_leaf(106, 134, 6, 4, RGB565_BE(70, 210, 130));
+            // Cheerful warm cream-pink
+            fb_gradient_v(0, SCREEN_H - 1, RGB565_BE(255, 235, 220), RGB565_BE(250, 210, 230));
+            // A couple of gentle sparkle stars
+            fb_draw_star(16, 28, 3, COL_SPARKLE);
+            fb_draw_star(112, 26, 3, COL_SPARKLE_SOFT);
             break;
 
         case FACE_LISTENING:
-            // Electric cyan to mint gradient
-            fb_gradient_v(0, SCREEN_H - 1, RGB565_BE(70, 220, 240), RGB565_BE(60, 160, 230));
-            // Acoustic wave pulses from headphones
-            int wave_r = ((int)(now_ms / 30) % 18) + 6;
-            fb_draw_circle(20, 64, wave_r, COL_CAT_WHITE);
-            fb_draw_circle(108, 64, wave_r, COL_CAT_WHITE);
-            fb_draw_star(64, 20, 3, COL_CAT_CREAM);
+            // Same calm blue gradient with subtle pulse accents
+            fb_gradient_v(0, SCREEN_H - 1, COL_BG_TOP, COL_BG_BOT);
+            {
+                int wr = ((int)(now_ms / 40) % 14) + 4;
+                fb_draw_circle(18, 64, wr, COL_SPARKLE_SOFT);
+                fb_draw_circle(110, 64, wr, COL_SPARKLE_SOFT);
+            }
             break;
 
         case FACE_THINKING:
-            // Violet to warm amber
-            fb_gradient_v(0, SCREEN_H - 1, RGB565_BE(180, 130, 255), RGB565_BE(255, 180, 70));
-            // Orbiting thought sparkles above head
+            // Slightly warmer lavender tint
+            fb_gradient_v(0, SCREEN_H - 1, RGB565_BE(210, 200, 245), RGB565_BE(190, 185, 235));
+            // Orbiting thought dots
             for (int i = 0; i < 3; i++) {
-                float rad = t_sec * 4.0f + (float)i * 2.094f;
-                int ox = 64 + (int)(cosf(rad) * 22.0f);
-                int oy = 22 + (int)(sinf(rad) * 6.0f);
-                fb_fill_circle(ox, oy, 2, COL_CAT_CREAM);
-                fb_draw_star(ox, oy, 3, COL_CAT_WHITE);
+                float rad = t_sec * 3.0f + (float)i * 2.094f;
+                int ox = 64 + (int)(cosf(rad) * 20.0f);
+                int oy = 20 + (int)(sinf(rad) * 5.0f);
+                fb_fill_circle(ox, oy, 2, COL_SPARKLE);
             }
             break;
 
         case FACE_SPEAKING:
-            // Dynamic warm pastel yellow to coral
-            fb_gradient_v(0, SCREEN_H - 1, RGB565_BE(255, 230, 140), RGB565_BE(255, 120, 170));
-            // Sound pulses
-            int p_r = (int)(s_audio_level_in * 16.0f) + 4;
-            fb_draw_circle(64, 80, p_r, COL_CAT_LIGHT_PINK);
-            fb_draw_star(20, 32, 3, COL_CAT_GOLD);
-            fb_draw_star(108, 30, 3, COL_CAT_GOLD);
+            // Warm cream with gentle pulse
+            fb_gradient_v(0, SCREEN_H - 1, RGB565_BE(255, 240, 225), RGB565_BE(245, 220, 235));
+            {
+                int pr = (int)(s_audio_level_in * 12.0f) + 3;
+                fb_draw_circle(64, 80, pr, COL_SPARKLE_SOFT);
+            }
             break;
 
-        case FACE_LOVE:
-            // Romantic magenta/rose
-            fb_gradient_v(0, SCREEN_H - 1, RGB565_BE(255, 80, 140), RGB565_BE(190, 25, 90));
-            fb_draw_heart(22, 28 + (int)(sinf(t_sec * 5.0f) * 2.0f), 5, COL_CAT_LIGHT_PINK);
-            fb_draw_heart(64, 18 + (int)(sinf(t_sec * 5.0f + 1.0f) * 2.5f), 6, COL_CAT_WHITE);
-            fb_draw_heart(106, 26 + (int)(sinf(t_sec * 5.0f + 2.0f) * 2.0f), 5, COL_CAT_LIGHT_PINK);
+        case FACE_CONFUSED:
+            // Slightly deeper lavender
+            fb_gradient_v(0, SCREEN_H - 1, RGB565_BE(215, 200, 250), RGB565_BE(185, 170, 235));
+            // Single floating question mark
+            fb_draw_question_mark(52, 18 + (int)(sinf(t_sec * 3.0f) * 2.0f), 8, COL_SPARKLE);
             break;
 
-        case FACE_ANGRY:
-            // Fiery crimson/orange
-            fb_gradient_v(0, SCREEN_H - 1, RGB565_BE(240, 70, 70), RGB565_BE(140, 20, 20));
-            // Red angry vein mark 💢
-            fb_draw_line(100, 20, 108, 20, COL_CAT_WHITE);
-            fb_draw_line(104, 16, 104, 24, COL_CAT_WHITE);
-            fb_draw_line(100, 24, 108, 16, COL_CAT_WHITE);
+        case FACE_SURPRISED:
+            // Warm cream-peach
+            fb_gradient_v(0, SCREEN_H - 1, RGB565_BE(255, 240, 210), RGB565_BE(255, 215, 220));
+            // Small exclamation accents
+            fb_draw_exclamation_mark(58, 17 + (int)(sinf(t_sec * 4.0f) * 1.5f), 7, COL_BELL_GOLD);
+            fb_draw_exclamation_mark(68, 15 + (int)(sinf(t_sec * 4.0f + 1.5f) * 1.5f), 8, COL_BOW_PINK);
             break;
 
-        case FACE_PLAYFUL:
-            // Bubblegum yellow to pink
-            fb_gradient_v(0, SCREEN_H - 1, RGB565_BE(255, 225, 130), RGB565_BE(255, 110, 180));
-            fb_draw_star(20, 28, 3, COL_CAT_GOLD);
-            fb_draw_heart(64, 18, 4, COL_CAT_WHITE);
-            fb_draw_star(108, 30, 4, COL_CAT_CREAM);
-            break;
-
-        case FACE_CURIOUS:
-            // Soft periwinkle/lilac
-            fb_gradient_v(0, SCREEN_H - 1, RGB565_BE(195, 210, 255), RGB565_BE(160, 140, 250));
-            fb_draw_star(22, 30, 3, COL_CAT_CREAM);
-            fb_draw_star(106, 26, 4, COL_CAT_WHITE);
+        case FACE_DISCONNECTED:
+            // Muted gray-blue — subdued
+            fb_gradient_v(0, SCREEN_H - 1, RGB565_BE(160, 165, 180), RGB565_BE(130, 135, 155));
             break;
 
         case FACE_BOOT:
         case FACE_IDLE:
         default:
-            // Calm friendly pastel sky blue
-            fb_gradient_v(0, SCREEN_H - 1, RGB565_BE(165, 220, 255), RGB565_BE(100, 165, 255));
-            fb_draw_star(18, 30, 3, COL_CAT_CREAM);
-            fb_draw_star(110, 28, 4, COL_CAT_WHITE);
-            fb_draw_star(16, 122, 2, COL_CAT_WHITE);
-            fb_draw_star(112, 120, 3, COL_CAT_CREAM);
+            // Calm cohesive pastel sky-blue to soft lavender
+            fb_gradient_v(0, SCREEN_H - 1, COL_BG_TOP, COL_BG_BOT);
+            // A few tiny sparkles to give the world life
+            fb_draw_star(16, 28, 2, COL_SPARKLE);
+            fb_draw_star(112, 26, 3, COL_SPARKLE_SOFT);
+            fb_draw_star(14, 120, 2, COL_SPARKLE_SOFT);
+            fb_draw_star(114, 118, 2, COL_SPARKLE);
             break;
     }
+
+    // --- Subtle ground shadow beneath the character ---
+    // Creates a sense of grounding and depth
+    fb_fill_ellipse(64, 138, 30, 4, rgb565_lerp(COL_BG_BOT, COL_BLACK, 40));
 }
 
 // -------------------------------------------------------------
@@ -770,7 +828,7 @@ static void render_header(int64_t now_ms)
     bool server_strike = false;
 
     if (s_server_status == SERVER_STATUS_CONNECTED) {
-        scol = COL_CAT_MINT;
+        scol = COL_GREEN;
     } else if (s_server_status == SERVER_STATUS_CONNECTING) {
         scol = ((now_ms / 250) % 2 == 0) ? COL_YELLOW : COL_DARK_GRAY;
     } else {
@@ -845,144 +903,239 @@ static void render_header(int64_t now_ms)
 }
 
 // -------------------------------------------------------------
-// Robot Cat Anatomy: Body, Collar & Golden Bell
+// Kawaii Cat Anatomy: Body, Pink Collar & Golden Bell
+// No headphones — replaced with natural fur body.
 // -------------------------------------------------------------
 static void render_cat_body(int base_y, face_state_t state)
 {
-    // Torso / Chest
-    fb_fill_rounded_rect(44, base_y + 24, 40, 24, 8, COL_CAT_WHITE);
-    // Subtle shadow on body side
-    fb_draw_line(44, base_y + 36, 44, base_y + 46, COL_CAT_SHADOW);
-    fb_draw_line(83, base_y + 36, 83, base_y + 46, COL_CAT_SHADOW);
+    // Torso / Chest — warm white with subtle shadow
+    fb_fill_rounded_rect(44, base_y + 24, 40, 24, 8, COL_FUR_BASE);
+    // Right edge shadow (light from upper-left)
+    fb_draw_line(83, base_y + 36, 83, base_y + 46, COL_FUR_SHADOW);
+    // Bottom shadow
+    fb_draw_line(46, base_y + 47, 82, base_y + 47, COL_FUR_SHADOW);
 
-    // Red Collar Band
-    fb_fill_rounded_rect(46, base_y + 26, 36, 6, 3, RGB565_BE(235, 40, 80));
+    // Pink Collar Band (matches bow)
+    fb_fill_rounded_rect(46, base_y + 26, 36, 6, 3, COL_COLLAR_PINK);
+    // Collar shadow on bottom edge
+    fb_draw_line(46, base_y + 31, 82, base_y + 31, COL_COLLAR_SHADOW);
 
-    // Golden Bell
+    // Golden Bell with pseudo-3D shading
     int bell_x = 64;
     int bell_y = base_y + 34;
-    fb_fill_circle(bell_x, bell_y, 5, COL_CAT_GOLD);
-    fb_draw_circle(bell_x, bell_y, 5, COL_CAT_DARK_GOLD);
-    // Specular highlight
-    fb_set_pixel(bell_x - 2, bell_y - 2, COL_CAT_WHITE);
-    fb_set_pixel(bell_x - 1, bell_y - 2, COL_CAT_WHITE);
+    fb_fill_circle(bell_x, bell_y, 5, COL_BELL_GOLD);
+    fb_draw_circle(bell_x, bell_y, 5, COL_BELL_SHADOW);
+    // Upper-left highlight (specular)
+    fb_set_pixel(bell_x - 2, bell_y - 2, COL_BELL_HIGHLIGHT);
+    fb_set_pixel(bell_x - 1, bell_y - 2, COL_BELL_HIGHLIGHT);
+    fb_set_pixel(bell_x - 2, bell_y - 1, COL_BELL_HIGHLIGHT);
     // Horizontal slit & center hole
-    fb_draw_line(bell_x - 3, bell_y + 1, bell_x + 3, bell_y + 1, COL_CAT_DARK_NAVY);
-    fb_set_pixel(bell_x, bell_y + 2, COL_CAT_DARK_NAVY);
+    fb_draw_line(bell_x - 3, bell_y + 1, bell_x + 3, bell_y + 1, COL_BELL_DARK);
+    fb_set_pixel(bell_x, bell_y + 2, COL_BELL_DARK);
 }
 
 // -------------------------------------------------------------
-// Robot Cat Anatomy: Ears, Pink Ribbon Bow & Cyber Headphones
+// Kawaii Cat Anatomy: Ears (3D shaded) & Volumetric Pink Bow
+// No cyber headphones — pure organic cat appearance.
+// Light source: upper-left
 // -------------------------------------------------------------
 static void render_cat_ears_and_bow(int base_y, face_state_t state)
 {
-    // 1. Cyber Headphone Headband (connecting behind ears)
-    for (int x = 24; x <= 104; x++) {
-        float norm = (float)(x - 64) / 40.0f;
-        int y = (base_y - 32) + (int)(norm * norm * 24.0f);
-        fb_set_pixel(x, y, COL_CAT_CYAN);
-        fb_set_pixel(x, y + 1, COL_CAT_CYAN);
-    }
+    // --- Left Ear (Screen Left) ---
+    // Outer fur — warm white base with shadow on right/bottom face
+    fb_fill_triangle(22, base_y - 12, 31, base_y - 42, 50, base_y - 18, COL_FUR_BASE);
+    // Outline (thick 2px line for solid, gap-free rendering)
+    fb_draw_thick_line(22, base_y - 12, 31, base_y - 42, 2, COL_OUTLINE);
+    fb_draw_thick_line(31, base_y - 42, 50, base_y - 18, 2, COL_OUTLINE);
+    // Right-face shadow (darker — away from light)
+    fb_fill_triangle(36, base_y - 14, 42, base_y - 36, 50, base_y - 18, COL_FUR_SHADOW);
+    // Inner ear pink (slightly smaller)
+    fb_fill_triangle(26, base_y - 16, 32, base_y - 37, 45, base_y - 21, COL_EAR_INNER);
+    // Inner ear highlight (upper-left lit, brighter when LISTENING)
+    uint16_t ear_hl = (state == FACE_LISTENING) ? COL_FUR_HIGHLIGHT : COL_CHEEK_HIGHLIGHT;
+    fb_draw_line(28, base_y - 20, 32, base_y - 34, ear_hl);
 
-    // 2. Left Ear (Screen Left)
-    // Outer white triangle
-    fb_fill_triangle(23, base_y - 14, 32, base_y - 44, 49, base_y - 20, COL_CAT_WHITE);
-    fb_draw_line(23, base_y - 14, 32, base_y - 44, COL_CAT_SHADOW);
-    fb_draw_line(32, base_y - 44, 49, base_y - 20, COL_CAT_SHADOW);
-    // Inner pink triangle
-    fb_fill_triangle(26, base_y - 18, 33, base_y - 39, 44, base_y - 23, COL_CAT_PINK);
-    // Light pink inner highlight
-    fb_draw_line(29, base_y - 22, 33, base_y - 36, COL_CAT_LIGHT_PINK);
+    // --- Right Ear (Screen Right) ---
+    // Outer fur
+    fb_fill_triangle(78, base_y - 18, 97, base_y - 42, 106, base_y - 12, COL_FUR_BASE);
+    // Outline (thick 2px line for solid rendering)
+    fb_draw_thick_line(78, base_y - 18, 97, base_y - 42, 2, COL_OUTLINE);
+    fb_draw_thick_line(97, base_y - 42, 106, base_y - 12, 2, COL_OUTLINE);
+    // Right-face shadow
+    fb_fill_triangle(78, base_y - 18, 86, base_y - 36, 92, base_y - 14, COL_FUR_SHADOW);
+    // Inner ear pink
+    fb_fill_triangle(83, base_y - 21, 95, base_y - 37, 101, base_y - 16, COL_EAR_INNER);
+    // Inner ear highlight
+    fb_draw_line(95, base_y - 34, 99, base_y - 20, ear_hl);
 
-    // 3. Right Ear (Screen Right)
-    // Outer white triangle
-    fb_fill_triangle(79, base_y - 20, 96, base_y - 44, 105, base_y - 14, COL_CAT_WHITE);
-    fb_draw_line(79, base_y - 20, 96, base_y - 44, COL_CAT_SHADOW);
-    fb_draw_line(96, base_y - 44, 105, base_y - 14, COL_CAT_SHADOW);
-    // Inner pink triangle
-    fb_fill_triangle(84, base_y - 23, 95, base_y - 39, 102, base_y - 18, COL_CAT_PINK);
-    fb_draw_line(95, base_y - 36, 99, base_y - 22, COL_CAT_LIGHT_PINK);
+    // --- Volumetric Pink Bow at Right Ear Base ---
+    // The bow sits at the base of the right ear (character's left = viewer's right)
+    // Light source upper-left: left loop lit, right loop shaded, knot medium
+    int bow_x = 99;
+    int bow_y = base_y - 22;
 
-    // 4. Pink Ribbon Bow at Right Ear Base (Viewer's Right)
-    int bow_x = 98;
-    int bow_y = base_y - 25;
-    // Left & Right Loops
-    fb_fill_circle(bow_x - 4, bow_y, 4, COL_CAT_PINK);
-    fb_fill_circle(bow_x + 4, bow_y, 4, COL_CAT_PINK);
-    // Loop highlights
-    fb_set_pixel(bow_x - 4, bow_y - 2, COL_CAT_LIGHT_PINK);
-    fb_set_pixel(bow_x + 4, bow_y - 2, COL_CAT_LIGHT_PINK);
-    // Center knot
-    fb_fill_circle(bow_x, bow_y, 3, COL_CAT_DEEP_PINK);
-    fb_set_pixel(bow_x, bow_y - 1, COL_CAT_LIGHT_PINK);
-    // Ribbon tails
-    fb_draw_thick_line(bow_x - 1, bow_y + 2, bow_x - 4, bow_y + 7, 2, COL_CAT_PINK);
-    fb_draw_thick_line(bow_x + 1, bow_y + 2, bow_x + 4, bow_y + 7, 2, COL_CAT_PINK);
+    // Left loop (lighter — towards light source)
+    fb_fill_circle(bow_x - 5, bow_y, 5, COL_BOW_HIGHLIGHT);
+    fb_fill_circle(bow_x - 4, bow_y, 4, COL_BOW_PINK);
+    // Right loop (darker — away from light)
+    fb_fill_circle(bow_x + 5, bow_y, 5, COL_BOW_SHADOW);
+    fb_fill_circle(bow_x + 4, bow_y, 4, COL_BOW_PINK);
+    // Loop inner highlights (tiny specular)
+    fb_set_pixel(bow_x - 5, bow_y - 2, COL_BOW_HIGHLIGHT);
+    fb_set_pixel(bow_x + 3, bow_y - 2, COL_BOW_PINK);
+    // Center knot (darker, dimensional)
+    fb_fill_circle(bow_x, bow_y, 3, COL_BOW_SHADOW);
+    fb_fill_circle(bow_x, bow_y, 2, COL_BOW_PINK);
+    fb_set_pixel(bow_x - 1, bow_y - 1, COL_BOW_HIGHLIGHT);
+    // Ribbon tails hanging down (from knot)
+    fb_draw_thick_line(bow_x - 1, bow_y + 2, bow_x - 4, bow_y + 8, 2, COL_BOW_PINK);
+    fb_draw_thick_line(bow_x + 1, bow_y + 2, bow_x + 4, bow_y + 8, 2, COL_BOW_SHADOW);
 }
 
 // -------------------------------------------------------------
-// Robot Cat Anatomy: Head & Cyber Headphones
+// Kawaii Cat Anatomy: Head with Pseudo-3D Shading & Cheeks
+// Light source: upper-left. Connected ears — seamless outline.
 // -------------------------------------------------------------
 static void render_cat_head(int base_y, face_state_t state)
 {
-    // Head: Smooth large rounded shape (74 px wide, 54 px high)
-    fb_fill_ellipse(64, base_y, 37, 27, COL_CAT_WHITE);
-    // Bottom contour line
-    for (int x = 32; x <= 96; x++) {
+    // --- Head ellipse: warm white fur ---
+    fb_fill_ellipse(64, base_y, 37, 27, COL_FUR_BASE);
+
+    // --- Pseudo-3D shading on head ---
+    // Upper-left highlight arc (lit side)
+    for (int x = 35; x <= 75; x++) {
         float dx = (float)(x - 64) / 37.0f;
         if (dx * dx <= 1.0f) {
-            int y = base_y + (int)(sqrtf(1.0f - dx * dx) * 27.0f);
-            fb_set_pixel(x, y, COL_CAT_SHADOW);
+            int y = base_y - (int)(sqrtf(1.0f - dx * dx) * 27.0f);
+            if (y >= 0 && y < SCREEN_H) {
+                fb_set_pixel(x, y + 1, COL_FUR_HIGHLIGHT);
+            }
         }
     }
 
-    // Cyber Headphones (Left & Right Earpads)
-    // Left Earpad
-    fb_fill_rounded_rect(17, base_y - 7, 9, 18, 4, COL_CAT_CYAN);
-    fb_fill_rounded_rect(19, base_y - 5, 5, 14, 2, COL_CAT_DARK_NAVY);
-    fb_set_pixel(21, base_y - 1, COL_CAT_WHITE);
+    // Lower-right shadow region (away from light)
+    for (int x = 60; x <= 96; x++) {
+        float dx = (float)(x - 64) / 37.0f;
+        if (dx * dx <= 1.0f) {
+            int y = base_y + (int)(sqrtf(1.0f - dx * dx) * 27.0f);
+            if (y >= 0 && y < SCREEN_H) {
+                fb_set_pixel(x, y, COL_FUR_SHADOW);
+            }
+        }
+    }
 
-    // Right Earpad
-    fb_fill_rounded_rect(102, base_y - 7, 9, 18, 4, COL_CAT_CYAN);
-    fb_fill_rounded_rect(104, base_y - 5, 5, 14, 2, COL_CAT_DARK_NAVY);
-    fb_set_pixel(106, base_y - 1, COL_CAT_WHITE);
+    // Bottom contour/shadow line
+    for (int x = 36; x <= 92; x++) {
+        float dx = (float)(x - 64) / 37.0f;
+        if (dx * dx <= 1.0f) {
+            int y = base_y + (int)(sqrtf(1.0f - dx * dx) * 27.0f);
+            fb_set_pixel(x, y, COL_FUR_SHADOW);
+        }
+    }
 
-    // Rosy Blush Cheeks
-    int blush_w = (state == FACE_EXCITED || state == FACE_HAPPY || state == FACE_LOVE) ? 8 : 6;
-    fb_fill_ellipse(35, base_y + 12, blush_w, 4, COL_CAT_PINK);
-    fb_fill_ellipse(93, base_y + 12, blush_w, 4, COL_CAT_PINK);
+    // Head contour outline (skips ear attachment areas so ears connect cleanly)
+    fb_draw_head_contour(64, base_y, 37, 27, COL_OUTLINE);
 
-    if (state == FACE_EXCITED || state == FACE_HAPPY || state == FACE_LOVE) {
-        // Extra white shine sparkle on blush
-        fb_set_pixel(34, base_y + 11, COL_CAT_WHITE);
-        fb_set_pixel(94, base_y + 11, COL_CAT_WHITE);
+    // --- Rosy Blush Cheeks ---
+    // Dynamically sized to emotional state
+    int blush_w = 6;
+    if (state == FACE_HAPPY_BIG) {
+        blush_w = 9; // Extra wide and prominent for laughing joy
+    } else if (state == FACE_EXCITED || state == FACE_LOVE) {
+        blush_w = 8;
+    } else if (state == FACE_HAPPY) {
+        blush_w = 7;
+    } else if (state == FACE_SLEEPY || state == FACE_OFFLINE) {
+        blush_w = 5;
+    }
+    fb_fill_ellipse(35, base_y + 12, blush_w, 4, COL_CHEEK_PINK);
+    fb_fill_ellipse(93, base_y + 12, blush_w, 4, COL_CHEEK_PINK);
+
+    // Cheek highlight (upper-left lit)
+    if (state == FACE_HAPPY_BIG || state == FACE_EXCITED || state == FACE_LOVE) {
+        fb_set_pixel(33, base_y + 11, COL_CHEEK_HIGHLIGHT);
+        fb_set_pixel(34, base_y + 11, COL_CHEEK_HIGHLIGHT);
+        fb_set_pixel(33, base_y + 12, COL_CHEEK_HIGHLIGHT);
+        fb_set_pixel(91, base_y + 11, COL_CHEEK_HIGHLIGHT);
+        fb_set_pixel(92, base_y + 11, COL_CHEEK_HIGHLIGHT);
+    } else if (state == FACE_HAPPY) {
+        fb_set_pixel(34, base_y + 11, COL_CHEEK_HIGHLIGHT);
+        fb_set_pixel(92, base_y + 11, COL_CHEEK_HIGHLIGHT);
     }
 }
 
 // -------------------------------------------------------------
-// Robot Cat Anatomy: Expressive Eyes
+// Kawaii Cat Anatomy: Glossy Layered Anime Eyes
+// Multi-layer: dark contour → iris gradient → pupil → highlights
+// Light source: upper-left (primary highlight at upper-left of eye)
 // -------------------------------------------------------------
-static void draw_single_anime_eye(int cx, int cy, float openness, float gaze_x, float gaze_y, bool is_love)
+typedef enum {
+    EYE_HL_NORMAL = 0,    // Primary circle + secondary circle + starlight dot
+    EYE_HL_STAR,          // Radiant starlight diamond pupil and extra sparkles (EXCITED)
+    EYE_HL_HEART,         // Heart highlight (LOVE)
+    EYE_HL_SURPRISE,      // Constricted pupil (radius 2) + tiny specular dot (SURPRISED)
+    EYE_HL_SOFT_SMILE     // Open iris with curved smiling lower eyelid (HAPPY)
+} eye_highlight_t;
+
+static void draw_eye_closed_happy(int cx, int cy, bool is_left)
 {
-    if (openness <= 0.08f) {
-        // Closed eye crescent line
-        fb_draw_thick_line(cx - 9, cy, cx - 3, cy - 3, 2, COL_CAT_DARK_NAVY);
-        fb_draw_thick_line(cx - 3, cy - 3, cx + 3, cy - 3, 2, COL_CAT_DARK_NAVY);
-        fb_draw_thick_line(cx + 3, cy - 3, cx + 9, cy, 2, COL_CAT_DARK_NAVY);
-        // Eyelash flick
-        fb_draw_line(cx + 8, cy - 1, cx + 11, cy - 3, COL_CAT_DARK_NAVY);
+    // Energetic joyful squeezed arc (^ ^)
+    fb_draw_thick_line(cx - 8, cy + 2, cx - 3, cy - 4, 2, COL_EYE_OUTER);
+    fb_draw_thick_line(cx - 3, cy - 4, cx + 3, cy - 4, 2, COL_EYE_OUTER);
+    fb_draw_thick_line(cx + 3, cy - 4, cx + 8, cy + 2, 2, COL_EYE_OUTER);
+    if (is_left) {
+        fb_draw_line(cx - 8, cy + 1, cx - 11, cy - 2, COL_EYE_OUTER);
+        fb_draw_line(cx - 7, cy + 3, cx - 10, cy + 2, COL_EYE_OUTER);
+    } else {
+        fb_draw_line(cx + 8, cy + 1, cx + 11, cy - 2, COL_EYE_OUTER);
+        fb_draw_line(cx + 7, cy + 3, cx + 10, cy + 2, COL_EYE_OUTER);
+    }
+}
+
+static void draw_eye_closed_sleepy(int cx, int cy, bool is_left)
+{
+    // Peaceful relaxed resting line with gentle dip (- -)
+    fb_draw_thick_line(cx - 8, cy - 1, cx - 2, cy + 2, 2, COL_EYE_OUTER);
+    fb_draw_thick_line(cx - 2, cy + 2, cx + 2, cy + 2, 2, COL_EYE_OUTER);
+    fb_draw_thick_line(cx + 2, cy + 2, cx + 8, cy - 1, 2, COL_EYE_OUTER);
+    if (is_left) {
+        fb_draw_line(cx - 7, cy, cx - 10, cy + 3, COL_EYE_OUTER);
+    } else {
+        fb_draw_line(cx + 7, cy, cx + 10, cy + 3, COL_EYE_OUTER);
+    }
+}
+
+static void draw_eye_closed_wink(int cx, int cy, bool is_left)
+{
+    // Playful wink arc with sweet double flick
+    fb_draw_thick_line(cx - 8, cy + 1, cx, cy - 4, 2, COL_EYE_OUTER);
+    fb_draw_thick_line(cx, cy - 4, cx + 8, cy + 1, 2, COL_EYE_OUTER);
+    if (is_left) {
+        fb_draw_line(cx - 7, cy, cx - 11, cy - 3, COL_EYE_OUTER);
+        fb_draw_line(cx - 6, cy + 2, cx - 9, cy + 2, COL_EYE_OUTER);
+    } else {
+        fb_draw_line(cx + 7, cy, cx + 11, cy - 3, COL_EYE_OUTER);
+        fb_draw_line(cx + 6, cy + 2, cx + 9, cy + 2, COL_EYE_OUTER);
+    }
+}
+
+static void draw_single_anime_eye(int cx, int cy, int rx, int ry, float gaze_x, float gaze_y, eye_highlight_t hl_mode)
+{
+    if (ry <= 2) {
+        draw_eye_closed_happy(cx, cy, (cx < 64));
         return;
     }
-
-    int rx = 10;
-    int ry = (int)roundf(13.0f * openness);
-    if (ry < 2) ry = 2;
 
     int gx = (int)roundf(gaze_x);
     int gy = (int)roundf(gaze_y);
 
-    // Fill eye socket with 3-band anime gradient
-    for (int dy = -ry; dy <= ry; dy++) {
+    int max_dy = ry;
+    if (hl_mode == EYE_HL_SOFT_SMILE) {
+        max_dy = (int)roundf((float)ry * 0.72f);
+    }
+
+    // --- Fill iris with 3-band gradient ---
+    for (int dy = -ry; dy <= max_dy; dy++) {
         int y = cy + dy;
         if (y < 0 || y >= SCREEN_H) continue;
         float term = 1.0f - ((float)(dy * dy)) / ((float)(ry * ry));
@@ -995,35 +1148,149 @@ static void draw_single_anime_eye(int cx, int cy, float openness, float gaze_x, 
             uint16_t col;
             int rel_y = dy - gy;
             if (rel_y < -ry / 3) {
-                // Top: Deep Navy/Violet
-                col = COL_CAT_DARK_NAVY;
+                col = COL_EYE_OUTER;
             } else if (rel_y <= ry / 4) {
-                // Middle: Royal Sky Blue
-                col = COL_CAT_SKY_BLUE;
+                col = COL_IRIS_TOP;
             } else {
-                // Bottom: Bright Cyan Glow
-                col = COL_CAT_CYAN;
+                col = COL_IRIS_BOT;
             }
             fb_set_pixel(x, y, col);
         }
     }
 
-    // Outer dark outline
-    fb_draw_circle(cx, cy, rx, COL_CAT_DARK_NAVY);
+    // --- Pupil ---
+    if (hl_mode == EYE_HL_SURPRISE) {
+        fb_fill_circle(cx + gx, cy + gy, 2, COL_PUPIL);
+    } else {
+        int pup_ry = (ry > 6) ? 4 : 2;
+        fb_fill_ellipse(cx + gx, cy + gy, 3, pup_ry, COL_PUPIL);
+    }
 
-    if (openness >= 0.5f) {
-        if (is_love) {
-            // Heart-shaped highlight ♥
-            fb_draw_heart(cx + gx, cy + gy, 4, COL_CAT_WHITE);
+    // --- Outer contour ---
+    if (hl_mode == EYE_HL_SOFT_SMILE) {
+        fb_draw_ellipse(cx, cy, rx, ry, COL_EYE_OUTER);
+        fb_draw_thick_line(cx - rx + 1, cy + max_dy - 1, cx, cy + max_dy + 1, 2, COL_EYE_OUTER);
+        fb_draw_thick_line(cx, cy + max_dy + 1, cx + rx - 1, cy + max_dy - 1, 2, COL_EYE_OUTER);
+    } else {
+        fb_draw_ellipse(cx, cy, rx, ry, COL_EYE_OUTER);
+    }
+
+    // --- Glossy highlights ---
+    if (ry >= 5) {
+        if (hl_mode == EYE_HL_HEART) {
+            fb_draw_heart(cx + gx, cy + gy - 1, 4, COL_EYE_HIGHLIGHT);
+        } else if (hl_mode == EYE_HL_STAR) {
+            fb_fill_circle(cx + gx - 3, cy + gy - 4, 3, COL_EYE_HIGHLIGHT);
+            fb_draw_line(cx + gx - 5, cy + gy - 4, cx + gx - 1, cy + gy - 4, COL_EYE_HIGHLIGHT);
+            fb_draw_line(cx + gx - 3, cy + gy - 6, cx + gx - 3, cy + gy - 2, COL_EYE_HIGHLIGHT);
+            fb_fill_circle(cx + gx + 3, cy + gy + 3, 1, COL_EYE_HIGHLIGHT2);
+            fb_set_pixel(cx + gx + 4, cy + gy - 2, COL_EYE_HIGHLIGHT);
+            fb_set_pixel(cx + gx - 4, cy + gy + 2, COL_EYE_HIGHLIGHT);
+        } else if (hl_mode == EYE_HL_SURPRISE) {
+            fb_fill_circle(cx + gx - 2, cy + gy - 3, 1, COL_EYE_HIGHLIGHT);
         } else {
-            // Anime layered highlights
-            // Primary large highlight (upper-left)
-            fb_fill_circle(cx + gx - 3, cy + gy - 4, 3, COL_CAT_WHITE);
-            // Secondary highlight (lower-right)
-            fb_fill_circle(cx + gx + 3, cy + gy + 4, 1, COL_CAT_WHITE);
-            // Diamond starlight dot
-            fb_set_pixel(cx + gx + 4, cy + gy - 2, COL_CAT_WHITE);
+            fb_fill_circle(cx + gx - 3, cy + gy - 4, 3, COL_EYE_HIGHLIGHT);
+            fb_fill_circle(cx + gx + 3, cy + gy + 3, 1, COL_EYE_HIGHLIGHT2);
+            fb_set_pixel(cx + gx + 4, cy + gy - 2, COL_EYE_HIGHLIGHT);
         }
+    }
+}
+
+static void render_cat_eyebrows(int base_y, face_state_t state)
+{
+    int left_cx = 45;
+    int right_cx = 83;
+    int eye_cy = base_y;
+
+    switch (state) {
+        case FACE_EXCITED:
+            // High arched enthusiastic brows
+            fb_draw_thick_line(left_cx - 6, eye_cy - 16, left_cx, eye_cy - 18, 2, COL_OUTLINE);
+            fb_draw_thick_line(left_cx, eye_cy - 18, left_cx + 5, eye_cy - 16, 2, COL_OUTLINE);
+            fb_draw_thick_line(right_cx - 5, eye_cy - 16, right_cx, eye_cy - 18, 2, COL_OUTLINE);
+            fb_draw_thick_line(right_cx, eye_cy - 18, right_cx + 6, eye_cy - 16, 2, COL_OUTLINE);
+            break;
+
+        case FACE_SURPRISED:
+            // Very high startled straight-curved brows
+            fb_draw_thick_line(left_cx - 6, eye_cy - 19, left_cx + 5, eye_cy - 19, 2, COL_OUTLINE);
+            fb_draw_thick_line(right_cx - 5, eye_cy - 19, right_cx + 6, eye_cy - 19, 2, COL_OUTLINE);
+            break;
+
+        case FACE_CONFUSED:
+            // Strongly asymmetric: left furrowed skepticism (\), right arched high (/)
+            fb_draw_thick_line(left_cx - 6, eye_cy - 13, left_cx + 5, eye_cy - 16, 2, COL_OUTLINE);
+            fb_draw_thick_line(right_cx - 5, eye_cy - 18, right_cx + 6, eye_cy - 14, 2, COL_OUTLINE);
+            break;
+
+        case FACE_THINKING:
+            // Left brow raised contemplative arc, right brow neutral
+            fb_draw_thick_line(left_cx - 5, eye_cy - 17, left_cx + 5, eye_cy - 16, 2, COL_OUTLINE);
+            fb_draw_line(right_cx - 5, eye_cy - 14, right_cx + 5, eye_cy - 14, COL_OUTLINE);
+            break;
+
+        case FACE_CURIOUS_L:
+            // Left brow raised high inquisitive arc
+            fb_draw_thick_line(left_cx - 5, eye_cy - 17, left_cx + 5, eye_cy - 15, 2, COL_OUTLINE);
+            fb_draw_line(right_cx - 5, eye_cy - 14, right_cx + 5, eye_cy - 14, COL_OUTLINE);
+            break;
+
+        case FACE_CURIOUS_R:
+            // Right brow raised high inquisitive arc
+            fb_draw_line(left_cx - 5, eye_cy - 14, left_cx + 5, eye_cy - 14, COL_OUTLINE);
+            fb_draw_thick_line(right_cx - 5, eye_cy - 15, right_cx + 5, eye_cy - 17, 2, COL_OUTLINE);
+            break;
+
+        case FACE_HAPPY:
+            // Soft sweet smiling brows
+            fb_draw_line(left_cx - 5, eye_cy - 15, left_cx, eye_cy - 17, COL_OUTLINE);
+            fb_draw_line(left_cx, eye_cy - 17, left_cx + 5, eye_cy - 15, COL_OUTLINE);
+            fb_draw_line(right_cx - 5, eye_cy - 15, right_cx, eye_cy - 17, COL_OUTLINE);
+            fb_draw_line(right_cx, eye_cy - 17, right_cx + 5, eye_cy - 15, COL_OUTLINE);
+            break;
+
+        case FACE_HAPPY_BIG:
+            // High happy brows
+            fb_draw_thick_line(left_cx - 6, eye_cy - 16, left_cx, eye_cy - 18, 2, COL_OUTLINE);
+            fb_draw_thick_line(left_cx, eye_cy - 18, left_cx + 5, eye_cy - 16, 2, COL_OUTLINE);
+            fb_draw_thick_line(right_cx - 5, eye_cy - 16, right_cx, eye_cy - 18, 2, COL_OUTLINE);
+            fb_draw_thick_line(right_cx, eye_cy - 18, right_cx + 6, eye_cy - 16, 2, COL_OUTLINE);
+            break;
+
+        case FACE_ERROR:
+        case FACE_SAD:
+            // Worried slanted eyebrows angled inward/upward (/ \)
+            fb_draw_thick_line(left_cx - 6, eye_cy - 13, left_cx + 5, eye_cy - 17, 2, COL_OUTLINE);
+            fb_draw_thick_line(right_cx - 5, eye_cy - 17, right_cx + 6, eye_cy - 13, 2, COL_OUTLINE);
+            break;
+
+        case FACE_ANGRY:
+            // Fierce slanted furrowed brows (\ /)
+            fb_draw_thick_line(left_cx - 6, eye_cy - 16, left_cx + 5, eye_cy - 12, 2, COL_OUTLINE);
+            fb_draw_thick_line(right_cx - 5, eye_cy - 12, right_cx + 6, eye_cy - 16, 2, COL_OUTLINE);
+            break;
+
+        case FACE_LISTENING:
+            // Alert attentive slightly perked brows
+            fb_draw_thick_line(left_cx - 5, eye_cy - 15, left_cx + 5, eye_cy - 15, 2, COL_OUTLINE);
+            fb_draw_thick_line(right_cx - 5, eye_cy - 15, right_cx + 5, eye_cy - 15, 2, COL_OUTLINE);
+            break;
+
+        case FACE_SLEEPY:
+            // Relaxed sleepy brows
+            fb_draw_line(left_cx - 4, eye_cy - 10, left_cx + 4, eye_cy - 10, COL_OUTLINE);
+            fb_draw_line(right_cx - 4, eye_cy - 10, right_cx + 4, eye_cy - 10, COL_OUTLINE);
+            break;
+
+        case FACE_OFFLINE:
+        case FACE_IDLE:
+        case FACE_NEUTRAL:
+        case FACE_SPEAKING:
+        default:
+            // Gentle neutral brow lines
+            fb_draw_line(left_cx - 4, eye_cy - 14, left_cx + 4, eye_cy - 14, COL_OUTLINE);
+            fb_draw_line(right_cx - 4, eye_cy - 14, right_cx + 4, eye_cy - 14, COL_OUTLINE);
+            break;
     }
 }
 
@@ -1037,166 +1304,228 @@ static void render_cat_eyes(int base_y, face_state_t state, float blink_factor)
     float gy = s_gaze_offset_y;
 
     switch (state) {
-        case FACE_EXCITED:
-            // Big sparkling open eyes, gaze slightly up
-            draw_single_anime_eye(left_cx, eye_cy, blink_factor, 0.0f, -2.0f, false);
-            draw_single_anime_eye(right_cx, eye_cy, blink_factor, 0.0f, -2.0f, false);
+        case FACE_EXCITED: {
+            // Wide sparkling anime eyes looking slightly upward with star specular
+            int ry = (int)roundf(14.0f * blink_factor);
+            draw_single_anime_eye(left_cx, eye_cy, 11, ry, 0.0f, -2.0f, EYE_HL_STAR);
+            draw_single_anime_eye(right_cx, eye_cy, 11, ry, 0.0f, -2.0f, EYE_HL_STAR);
+            break;
+        }
+
+        case FACE_SURPRISED: {
+            // Tall round wide eyes with small constricted pupils
+            int ry = (int)roundf(15.0f * blink_factor);
+            draw_single_anime_eye(left_cx, eye_cy, 11, ry, 0.0f, 0.0f, EYE_HL_SURPRISE);
+            draw_single_anime_eye(right_cx, eye_cy, 11, ry, 0.0f, 0.0f, EYE_HL_SURPRISE);
+            break;
+        }
+
+        case FACE_HAPPY: {
+            // Soft smiling OPEN anime eyes with upturned lower lids!
+            if (blink_factor <= 0.2f) {
+                draw_eye_closed_happy(left_cx, eye_cy, true);
+                draw_eye_closed_happy(right_cx, eye_cy, false);
+            } else {
+                int ry = (int)roundf(12.0f * blink_factor);
+                draw_single_anime_eye(left_cx, eye_cy, 10, ry, 0.0f, 0.0f, EYE_HL_SOFT_SMILE);
+                draw_single_anime_eye(right_cx, eye_cy, 10, ry, 0.0f, 0.0f, EYE_HL_SOFT_SMILE);
+            }
+            break;
+        }
+
+        case FACE_HAPPY_BIG:
+            // Squeezed shut into joyful happy upward arcs (^ ^)
+            draw_eye_closed_happy(left_cx, eye_cy, true);
+            draw_eye_closed_happy(right_cx, eye_cy, false);
             break;
 
-        case FACE_SURPRISED:
-            // Extra large wide eyes looking forward
-            draw_single_anime_eye(left_cx, eye_cy, blink_factor, 0.0f, 0.0f, false);
-            draw_single_anime_eye(right_cx, eye_cy, blink_factor, 0.0f, 0.0f, false);
+        case FACE_CURIOUS_L: {
+            // Left eye enlarged, right eye narrower half-lid, looking left
+            int l_ry = (int)roundf(14.0f * blink_factor);
+            int r_ry = (int)roundf(11.0f * blink_factor);
+            draw_single_anime_eye(left_cx, eye_cy, 11, l_ry, -3.5f, 0.0f, EYE_HL_NORMAL);
+            draw_single_anime_eye(right_cx, eye_cy, 9,  r_ry, -3.5f, 0.0f, EYE_HL_NORMAL);
             break;
+        }
+
+        case FACE_CURIOUS_R: {
+            // Right eye enlarged, left eye narrower half-lid, looking right
+            int l_ry = (int)roundf(11.0f * blink_factor);
+            int r_ry = (int)roundf(14.0f * blink_factor);
+            draw_single_anime_eye(left_cx, eye_cy, 9,  l_ry, 3.5f, 0.0f, EYE_HL_NORMAL);
+            draw_single_anime_eye(right_cx, eye_cy, 11, r_ry, 3.5f, 0.0f, EYE_HL_NORMAL);
+            break;
+        }
 
         case FACE_SQUINT:
-            // Left eye winks, right eye open sparkling!
-            fb_draw_thick_line(left_cx - 8, eye_cy, left_cx, eye_cy - 4, 2, COL_CAT_DARK_NAVY);
-            fb_draw_thick_line(left_cx, eye_cy - 4, left_cx + 8, eye_cy, 2, COL_CAT_DARK_NAVY);
-            fb_draw_line(left_cx + 7, eye_cy - 1, left_cx + 10, eye_cy - 4, COL_CAT_DARK_NAVY);
-            draw_single_anime_eye(right_cx, eye_cy, blink_factor, 0.0f, 0.0f, false);
+        case FACE_WINK_LEFT: {
+            // Left eye closed wink, right eye wide open
+            draw_eye_closed_wink(left_cx, eye_cy, true);
+            int ry = (int)roundf(13.0f * blink_factor);
+            draw_single_anime_eye(right_cx, eye_cy, 10, ry, 0.0f, 0.0f, EYE_HL_NORMAL);
             break;
-
-        case FACE_WINK_LEFT:
-            // Left wink arc, right eye wide open
-            fb_draw_thick_line(left_cx - 8, eye_cy, left_cx, eye_cy - 4, 2, COL_CAT_DARK_NAVY);
-            fb_draw_thick_line(left_cx, eye_cy - 4, left_cx + 8, eye_cy, 2, COL_CAT_DARK_NAVY);
-            fb_draw_line(left_cx + 7, eye_cy - 1, left_cx + 10, eye_cy - 4, COL_CAT_DARK_NAVY);
-            draw_single_anime_eye(right_cx, eye_cy, blink_factor, 0.0f, 0.0f, false);
-            break;
+        }
 
         case FACE_WINK_RIGHT:
-        case FACE_PLAYFUL:
-            // Left eye open, right eye winks
-            draw_single_anime_eye(left_cx, eye_cy, blink_factor, 0.0f, 0.0f, false);
-            fb_draw_thick_line(right_cx - 8, eye_cy, right_cx, eye_cy - 4, 2, COL_CAT_DARK_NAVY);
-            fb_draw_thick_line(right_cx, eye_cy - 4, right_cx + 8, eye_cy, 2, COL_CAT_DARK_NAVY);
-            fb_draw_line(right_cx + 7, eye_cy - 1, right_cx + 10, eye_cy - 4, COL_CAT_DARK_NAVY);
+        case FACE_PLAYFUL: {
+            // Left eye wide open, right eye closed wink
+            int ry = (int)roundf(13.0f * blink_factor);
+            draw_single_anime_eye(left_cx, eye_cy, 10, ry, 0.0f, 0.0f, EYE_HL_NORMAL);
+            draw_eye_closed_wink(right_cx, eye_cy, false);
             break;
+        }
 
-        case FACE_HAPPY:
-            // Both eyes closed in happy crescent arcs (^ ^)
-            fb_draw_thick_line(left_cx - 8, eye_cy, left_cx, eye_cy - 4, 2, COL_CAT_DARK_NAVY);
-            fb_draw_thick_line(left_cx, eye_cy - 4, left_cx + 8, eye_cy, 2, COL_CAT_DARK_NAVY);
-            fb_draw_line(left_cx + 7, eye_cy - 1, left_cx + 10, eye_cy - 4, COL_CAT_DARK_NAVY);
-
-            fb_draw_thick_line(right_cx - 8, eye_cy, right_cx, eye_cy - 4, 2, COL_CAT_DARK_NAVY);
-            fb_draw_thick_line(right_cx, eye_cy - 4, right_cx + 8, eye_cy, 2, COL_CAT_DARK_NAVY);
-            fb_draw_line(right_cx + 7, eye_cy - 1, right_cx + 10, eye_cy - 4, COL_CAT_DARK_NAVY);
+        case FACE_CONFUSED: {
+            // Strongly asymmetric: left squinted skeptical, right wide open
+            int l_ry = (int)roundf(9.0f * blink_factor);
+            int r_ry = (int)roundf(13.0f * blink_factor);
+            draw_single_anime_eye(left_cx, eye_cy, 9,  l_ry, -3.0f, -2.0f, EYE_HL_NORMAL);
+            draw_single_anime_eye(right_cx, eye_cy, 11, r_ry, -2.0f, -2.5f, EYE_HL_NORMAL);
             break;
-
-        case FACE_CONFUSED:
-            // Asymmetric eyes: left looking up-left, right slightly wider
-            draw_single_anime_eye(left_cx, eye_cy, 0.85f * blink_factor, -3.0f, -3.0f, false);
-            draw_single_anime_eye(right_cx, eye_cy, blink_factor, -3.0f, -2.0f, false);
-            // Inquisitive curved brow
-            fb_draw_line(left_cx - 6, eye_cy - 12, left_cx + 6, eye_cy - 14, COL_CAT_DARK_NAVY);
-            fb_draw_line(right_cx - 6, eye_cy - 14, right_cx + 6, eye_cy - 11, COL_CAT_DARK_NAVY);
-            break;
+        }
 
         case FACE_SLEEPY:
-            // Relaxed horizontal sleepy eyes
-            fb_draw_thick_line(left_cx - 8, eye_cy + 2, left_cx + 8, eye_cy + 2, 2, COL_CAT_DARK_NAVY);
-            fb_draw_thick_line(right_cx - 8, eye_cy + 2, right_cx + 8, eye_cy + 2, 2, COL_CAT_DARK_NAVY);
+            // Both eyes peacefully closed with downward resting lids
+            draw_eye_closed_sleepy(left_cx, eye_cy, true);
+            draw_eye_closed_sleepy(right_cx, eye_cy, false);
             break;
 
-        case FACE_SAD:
+        case FACE_THINKING: {
+            // Asymmetrical thoughtful upward-right glance
+            int l_ry = (int)roundf(13.0f * blink_factor);
+            int r_ry = (int)roundf(10.0f * blink_factor);
+            draw_single_anime_eye(left_cx, eye_cy, 10, l_ry, 2.5f, -3.0f, EYE_HL_NORMAL);
+            draw_single_anime_eye(right_cx, eye_cy, 9,  r_ry, 2.5f, -3.0f, EYE_HL_NORMAL);
+            break;
+        }
+
+        case FACE_LISTENING: {
+            // Attentive forward alert eyes
+            int ry = (int)roundf(14.0f * blink_factor);
+            draw_single_anime_eye(left_cx, eye_cy, 10, ry, 0.0f, -1.0f, EYE_HL_NORMAL);
+            draw_single_anime_eye(right_cx, eye_cy, 10, ry, 0.0f, -1.0f, EYE_HL_NORMAL);
+            break;
+        }
+
         case FACE_ERROR:
-            // Sad watery eyes with tears
-            draw_single_anime_eye(left_cx, eye_cy, 0.85f * blink_factor, 0.0f, 3.0f, false);
-            draw_single_anime_eye(right_cx, eye_cy, 0.85f * blink_factor, 0.0f, 3.0f, false);
-            // Slanted sad brows
-            fb_draw_line(left_cx - 6, eye_cy - 14, left_cx + 6, eye_cy - 11, COL_CAT_DARK_NAVY);
-            fb_draw_line(right_cx - 6, eye_cy - 11, right_cx + 6, eye_cy - 14, COL_CAT_DARK_NAVY);
-            // Teardrops at outer corners
-            fb_fill_circle(left_cx - 8, eye_cy + 8, 2, COL_CAT_CYAN);
-            fb_fill_circle(right_cx + 8, eye_cy + 8, 2, COL_CAT_CYAN);
+        case FACE_SAD: {
+            // Concerned / worried apologetic downward gaze
+            int ry = (int)roundf(11.0f * blink_factor);
+            draw_single_anime_eye(left_cx, eye_cy + 1, 10, ry, 1.0f, 2.0f, EYE_HL_NORMAL);
+            draw_single_anime_eye(right_cx, eye_cy + 1, 10, ry, -1.0f, 2.0f, EYE_HL_NORMAL);
             break;
+        }
 
-        case FACE_THINKING:
-            // Looking up-right quizzically
-            draw_single_anime_eye(left_cx, eye_cy, blink_factor, 3.0f, -3.5f, false);
-            draw_single_anime_eye(right_cx, eye_cy, blink_factor, 3.0f, -3.5f, false);
+        case FACE_DISCONNECTED: {
+            // Subdued half-lidded calm eyes
+            int ry = (int)roundf(8.0f * blink_factor);
+            draw_single_anime_eye(left_cx, eye_cy, 10, ry, 0.0f, 0.0f, EYE_HL_NORMAL);
+            draw_single_anime_eye(right_cx, eye_cy, 10, ry, 0.0f, 0.0f, EYE_HL_NORMAL);
             break;
+        }
 
-        case FACE_LOVE:
-            // Heart-shaped eyes ♥
-            draw_single_anime_eye(left_cx, eye_cy, blink_factor, 0.0f, 0.0f, true);
-            draw_single_anime_eye(right_cx, eye_cy, blink_factor, 0.0f, 0.0f, true);
+        case FACE_BOOT: {
+            int64_t boot_elapsed = esp_timer_get_time() / 1000 - s_boot_start_ms;
+            if (boot_elapsed < 800) {
+                draw_eye_closed_sleepy(left_cx, eye_cy, true);
+                draw_eye_closed_sleepy(right_cx, eye_cy, false);
+            } else if (boot_elapsed < 1600) {
+                float open = 0.5f + 0.3f * sinf((float)(boot_elapsed - 800) / 800.0f * 3.14159f);
+                int ry = (int)roundf(10.0f * open);
+                draw_single_anime_eye(left_cx, eye_cy, 10, ry, 0.0f, 0.0f, EYE_HL_NORMAL);
+                draw_single_anime_eye(right_cx, eye_cy, 10, ry, 0.0f, 0.0f, EYE_HL_NORMAL);
+            } else {
+                int ry = (int)roundf(13.0f * blink_factor);
+                draw_single_anime_eye(left_cx, eye_cy, 10, ry, 0.0f, 0.0f, EYE_HL_NORMAL);
+                draw_single_anime_eye(right_cx, eye_cy, 10, ry, 0.0f, 0.0f, EYE_HL_NORMAL);
+            }
             break;
+        }
 
-        case FACE_ANGRY:
-            // Slanted angry brows \ /
-            draw_single_anime_eye(left_cx, eye_cy, 0.9f * blink_factor, 0.0f, 0.0f, false);
-            draw_single_anime_eye(right_cx, eye_cy, 0.9f * blink_factor, 0.0f, 0.0f, false);
-            fb_draw_thick_line(left_cx - 8, eye_cy - 12, left_cx + 6, eye_cy - 8, 2, COL_CAT_DARK_NAVY);
-            fb_draw_thick_line(right_cx - 6, eye_cy - 8, right_cx + 8, eye_cy - 12, 2, COL_CAT_DARK_NAVY);
+        case FACE_LOVE: {
+            int ry = (int)roundf(13.0f * blink_factor);
+            draw_single_anime_eye(left_cx, eye_cy, 10, ry, 0.0f, 0.0f, EYE_HL_HEART);
+            draw_single_anime_eye(right_cx, eye_cy, 10, ry, 0.0f, 0.0f, EYE_HL_HEART);
             break;
+        }
 
-        case FACE_CURIOUS:
-            // Asymmetric eyes
-            draw_single_anime_eye(left_cx, eye_cy, 1.05f * blink_factor, 2.0f, -1.0f, false);
-            draw_single_anime_eye(right_cx, eye_cy, 0.90f * blink_factor, 2.0f, -1.0f, false);
+        case FACE_ANGRY: {
+            int ry = (int)roundf(10.0f * blink_factor);
+            draw_single_anime_eye(left_cx, eye_cy, 10, ry, 0.0f, 0.0f, EYE_HL_NORMAL);
+            draw_single_anime_eye(right_cx, eye_cy, 10, ry, 0.0f, 0.0f, EYE_HL_NORMAL);
             break;
+        }
 
-        case FACE_BOOT:
+        case FACE_SPEAKING:
         case FACE_IDLE:
         case FACE_NEUTRAL:
         case FACE_RECOVERED:
-        case FACE_LISTENING:
-        case FACE_SPEAKING:
-        default:
-            // Normal sparkling anime eyes with saccade gaze
-            draw_single_anime_eye(left_cx, eye_cy, blink_factor, gx, gy, false);
-            draw_single_anime_eye(right_cx, eye_cy, blink_factor, gx, gy, false);
+        default: {
+            int ry = (int)roundf(13.0f * blink_factor);
+            draw_single_anime_eye(left_cx, eye_cy, 10, ry, gx, gy, EYE_HL_NORMAL);
+            draw_single_anime_eye(right_cx, eye_cy, 10, ry, gx, gy, EYE_HL_NORMAL);
             break;
+        }
     }
 }
 
 // -------------------------------------------------------------
-// Robot Cat Anatomy: Nose & Mouth
+// Kawaii Cat Anatomy: Nose & Expressive Mouth
 // -------------------------------------------------------------
 static void render_cat_mouth(int base_y, face_state_t state, int64_t now_ms)
 {
-    // Tiny pink cat nose
-    fb_fill_triangle(63, base_y + 8, 65, base_y + 8, 64, base_y + 10, COL_CAT_PINK);
+    // Tiny pink cat nose (small inverted triangle)
+    fb_fill_triangle(63, base_y + 8, 65, base_y + 8, 64, base_y + 10, COL_CHEEK_PINK);
 
     int mx = 64;
     int my = base_y + 13;
 
     switch (state) {
-        case FACE_EXCITED:
         case FACE_HAPPY:
-        case FACE_WINK_LEFT:
-        case FACE_WINK_RIGHT:
-            // Big open happy mouth showing tongue
-            fb_fill_triangle(mx - 6, my, mx + 6, my, mx, my + 8, COL_CAT_MOUTH_RED);
-            fb_fill_circle(mx, my + 6, 3, COL_CAT_TONGUE);
-            fb_set_pixel(mx, my + 1, COL_CAT_WHITE); // Tiny tooth highlight
+            // Sweet curved happy smile
+            fb_draw_thick_line(mx - 6, my + 1, mx, my + 3, 2, COL_EYE_OUTER);
+            fb_draw_thick_line(mx, my + 3, mx + 6, my + 1, 2, COL_EYE_OUTER);
+            fb_draw_line(mx - 6, my + 1, mx - 7, my - 1, COL_EYE_OUTER);
+            fb_draw_line(mx + 6, my + 1, mx + 7, my - 1, COL_EYE_OUTER);
+            break;
+
+        case FACE_HAPPY_BIG:
+            // Wide open joyful laughing mouth showing ruby interior, large pink tongue, and tooth highlight!
+            fb_fill_triangle(mx - 7, my, mx + 7, my, mx, my + 9, COL_MOUTH_RED);
+            fb_fill_circle(mx, my + 7, 3, COL_TONGUE);
+            fb_set_pixel(mx, my + 1, COL_FUR_HIGHLIGHT); // Tooth specular
+            fb_draw_line(mx - 7, my, mx + 7, my, COL_EYE_OUTER);
+            fb_draw_line(mx - 7, my, mx, my + 9, COL_EYE_OUTER);
+            fb_draw_line(mx + 7, my, mx, my + 9, COL_EYE_OUTER);
+            break;
+
+        case FACE_EXCITED:
+            // Big enthusiastic open 'D' mouth with tongue
+            fb_fill_triangle(mx - 6, my, mx + 6, my, mx, my + 8, COL_MOUTH_RED);
+            fb_fill_circle(mx, my + 6, 3, COL_TONGUE);
+            fb_set_pixel(mx, my + 1, COL_FUR_HIGHLIGHT);
             break;
 
         case FACE_SURPRISED:
-            // Small open 'O' mouth
-            fb_fill_ellipse(mx, my + 3, 3, 4, COL_CAT_MOUTH_RED);
-            fb_fill_circle(mx, my + 5, 2, COL_CAT_TONGUE);
+            // Small round 'O' mouth
+            fb_fill_ellipse(mx, my + 3, 3, 5, COL_MOUTH_RED);
+            fb_fill_circle(mx, my + 5, 2, COL_TONGUE);
+            fb_draw_ellipse(mx, my + 3, 3, 5, COL_EYE_OUTER);
             break;
 
-        case FACE_SAD:
-        case FACE_ERROR:
-            // Sad downturned pout
-            fb_draw_thick_line(mx - 5, my + 4, mx, my + 1, 2, COL_CAT_DARK_NAVY);
-            fb_draw_thick_line(mx, my + 1, mx + 5, my + 4, 2, COL_CAT_DARK_NAVY);
+        case FACE_LISTENING:
+            // Small neat closed attentive mouth
+            fb_draw_thick_line(mx - 3, my + 1, mx + 3, my + 1, 2, COL_EYE_OUTER);
             break;
 
-        case FACE_CONFUSED:
-            // Wavy quizzical mouth (~)
-            fb_draw_line(mx - 4, my + 2, mx - 1, my, COL_CAT_DARK_NAVY);
-            fb_draw_line(mx - 1, my, mx + 1, my + 3, COL_CAT_DARK_NAVY);
-            fb_draw_line(mx + 1, my + 3, mx + 4, my + 1, COL_CAT_DARK_NAVY);
+        case FACE_THINKING:
+            // Small thoughtful off-center pursed mouth
+            fb_draw_thick_line(mx, my + 2, mx + 4, my + 1, 2, COL_EYE_OUTER);
+            fb_draw_line(mx + 4, my + 1, mx + 3, my - 1, COL_EYE_OUTER);
             break;
 
         case FACE_SPEAKING: {
-            // Dynamic speaking mouth modulation
+            // Dynamic speaking mouth modulation with 2 shapes (open 'ah' vs round 'oh')
             float lev = s_audio_level_in;
             float synth = 0.3f + 0.4f * fabsf(sinf((float)now_ms * 0.012f));
             if (lev < 0.08f) lev = synth;
@@ -1204,101 +1533,185 @@ static void render_cat_mouth(int base_y, face_state_t state, int64_t now_ms)
             if (open_h > 10) open_h = 10;
 
             if (open_h <= 3) {
-                // Closed smile
-                fb_draw_line(mx - 5, my + 1, mx, my + 2, COL_CAT_DARK_NAVY);
-                fb_draw_line(mx, my + 2, mx + 5, my + 1, COL_CAT_DARK_NAVY);
+                // Closed friendly smile
+                fb_draw_line(mx - 5, my + 1, mx, my + 2, COL_EYE_OUTER);
+                fb_draw_line(mx, my + 2, mx + 5, my + 1, COL_EYE_OUTER);
+            } else if (((now_ms / 200) % 2) == 0) {
+                // Shape 1: Open 'ah' wedge
+                fb_fill_triangle(mx - 5, my, mx + 5, my, mx, my + open_h, COL_MOUTH_RED);
+                fb_fill_circle(mx, my + open_h - 2, 2, COL_TONGUE);
+                fb_draw_line(mx - 5, my, mx + 5, my, COL_EYE_OUTER);
             } else {
-                fb_fill_triangle(mx - 5, my, mx + 5, my, mx, my + open_h, COL_CAT_MOUTH_RED);
-                fb_fill_circle(mx, my + open_h - 2, 2, COL_CAT_TONGUE);
+                // Shape 2: Rounded 'oh' oval
+                int oh_w = open_h > 6 ? 4 : 3;
+                fb_fill_ellipse(mx, my + open_h / 2, oh_w, open_h / 2, COL_MOUTH_RED);
+                fb_fill_circle(mx, my + open_h - 2, 2, COL_TONGUE);
+                fb_draw_ellipse(mx, my + open_h / 2, oh_w, open_h / 2, COL_EYE_OUTER);
             }
             break;
         }
 
+        case FACE_CONFUSED:
+            // Crooked wavy quizzical mouth (~)
+            fb_draw_thick_line(mx - 5, my + 3, mx - 2, my, 2, COL_EYE_OUTER);
+            fb_draw_thick_line(mx - 2, my, mx + 1, my + 3, 2, COL_EYE_OUTER);
+            fb_draw_thick_line(mx + 1, my + 3, mx + 5, my + 1, 2, COL_EYE_OUTER);
+            break;
+
+        case FACE_CURIOUS_L:
+            // Inquisitive smile tilted up to the left
+            fb_draw_thick_line(mx - 5, my - 1, mx - 1, my + 2, 2, COL_EYE_OUTER);
+            fb_draw_thick_line(mx - 1, my + 2, mx + 5, my + 3, 2, COL_EYE_OUTER);
+            break;
+
+        case FACE_CURIOUS_R:
+            // Inquisitive smile tilted up to the right
+            fb_draw_thick_line(mx - 5, my + 3, mx + 1, my + 2, 2, COL_EYE_OUTER);
+            fb_draw_thick_line(mx + 1, my + 2, mx + 5, my - 1, 2, COL_EYE_OUTER);
+            break;
+
+        case FACE_WINK_LEFT:
+        case FACE_WINK_RIGHT:
+            // Playful asymmetric cat smirk
+            fb_draw_thick_line(mx - 4, my + 2, mx, my + 2, 2, COL_EYE_OUTER);
+            fb_draw_thick_line(mx, my + 2, mx + 5, my - 1, 2, COL_EYE_OUTER);
+            break;
+
         case FACE_PLAYFUL:
             // Smile with tongue sticking out (blep :P)
-            fb_draw_line(mx - 4, my + 1, mx, my + 2, COL_CAT_DARK_NAVY);
-            fb_draw_line(mx, my + 2, mx + 4, my + 1, COL_CAT_DARK_NAVY);
-            fb_fill_rounded_rect(mx, my + 2, 4, 5, 2, COL_CAT_TONGUE);
+            fb_draw_line(mx - 4, my + 1, mx, my + 2, COL_EYE_OUTER);
+            fb_draw_line(mx, my + 2, mx + 4, my + 1, COL_EYE_OUTER);
+            fb_fill_rounded_rect(mx, my + 2, 4, 5, 2, COL_TONGUE);
             break;
 
         case FACE_ANGRY:
             // Downward frown with fangs
-            fb_draw_thick_line(mx - 5, my + 3, mx + 5, my + 3, 2, COL_CAT_DARK_NAVY);
-            fb_fill_triangle(mx - 3, my + 3, mx - 1, my + 3, mx - 2, my + 5, COL_CAT_WHITE);
-            fb_fill_triangle(mx + 1, my + 3, mx + 3, my + 3, mx + 2, my + 5, COL_CAT_WHITE);
+            fb_draw_thick_line(mx - 5, my + 3, mx + 5, my + 3, 2, COL_EYE_OUTER);
+            fb_fill_triangle(mx - 3, my + 3, mx - 1, my + 3, mx - 2, my + 5, COL_FUR_HIGHLIGHT);
+            fb_fill_triangle(mx + 1, my + 3, mx + 3, my + 3, mx + 2, my + 5, COL_FUR_HIGHLIGHT);
+            break;
+
+        case FACE_ERROR:
+        case FACE_SAD:
+            // Worried downturned apologetic pout
+            fb_draw_thick_line(mx - 5, my + 3, mx, my, 2, COL_EYE_OUTER);
+            fb_draw_thick_line(mx, my, mx + 5, my + 3, 2, COL_EYE_OUTER);
             break;
 
         case FACE_SLEEPY:
             // Gentle relaxed mouth line
-            fb_draw_line(mx - 3, my + 1, mx + 3, my + 1, COL_CAT_DARK_NAVY);
+            fb_draw_line(mx - 3, my + 1, mx + 3, my + 1, COL_EYE_OUTER);
             break;
 
-        case FACE_BOOT:
+        case FACE_OFFLINE:
+            // Calm neutral straight mouth
+            fb_draw_line(mx - 3, my + 1, mx + 3, my + 1, COL_EYE_OUTER);
+            break;
+
+        case FACE_BOOT: {
+            int64_t boot_elapsed = now_ms - s_boot_start_ms;
+            if (boot_elapsed < 800) {
+                fb_draw_line(mx - 3, my + 1, mx + 3, my + 1, COL_EYE_OUTER);
+            } else if (boot_elapsed < 1600) {
+                // Sleepy kitten stretch yawn
+                fb_fill_ellipse(mx, my + 3, 2, 3, COL_MOUTH_RED);
+                fb_draw_ellipse(mx, my + 3, 2, 3, COL_EYE_OUTER);
+            } else {
+                // Waking feline smile (:3)
+                fb_draw_line(mx - 5, my, mx - 2, my + 2, COL_EYE_OUTER);
+                fb_draw_line(mx - 2, my + 2, mx, my + 1, COL_EYE_OUTER);
+                fb_draw_line(mx, my + 1, mx + 2, my + 2, COL_EYE_OUTER);
+                fb_draw_line(mx + 2, my + 2, mx + 5, my, COL_EYE_OUTER);
+            }
+            break;
+        }
+
         case FACE_IDLE:
         case FACE_NEUTRAL:
         case FACE_RECOVERED:
         case FACE_SQUINT:
         default:
             // Classic sweet feline ':3' double curve smile
-            fb_draw_line(mx - 5, my, mx - 2, my + 2, COL_CAT_DARK_NAVY);
-            fb_draw_line(mx - 2, my + 2, mx, my + 1, COL_CAT_DARK_NAVY);
-            fb_draw_line(mx, my + 1, mx + 2, my + 2, COL_CAT_DARK_NAVY);
-            fb_draw_line(mx + 2, my + 2, mx + 5, my, COL_CAT_DARK_NAVY);
+            fb_draw_line(mx - 5, my, mx - 2, my + 2, COL_EYE_OUTER);
+            fb_draw_line(mx - 2, my + 2, mx, my + 1, COL_EYE_OUTER);
+            fb_draw_line(mx, my + 1, mx + 2, my + 2, COL_EYE_OUTER);
+            fb_draw_line(mx + 2, my + 2, mx + 5, my, COL_EYE_OUTER);
             break;
     }
 }
 
 // -------------------------------------------------------------
-// Robot Cat Anatomy: Paws & Gestures
+// Kawaii Cat Anatomy: Paws & Gestures
 // -------------------------------------------------------------
 static void draw_single_paw(int cx, int cy, bool raised)
 {
-    // White rounded paw body
-    fb_fill_ellipse(cx, cy, 7, 6, COL_CAT_WHITE);
-    fb_draw_circle(cx, cy, 7, COL_CAT_SHADOW);
+    // Warm white rounded paw body
+    fb_fill_ellipse(cx, cy, 7, 6, COL_FUR_BASE);
+    fb_draw_circle(cx, cy, 7, COL_FUR_SHADOW);
 
     // Pink paw pads (1 large central bean + 3 tiny toe beans)
-    fb_fill_ellipse(cx, cy + 1, 3, 2, COL_CAT_PINK);
-    fb_fill_circle(cx - 3, cy - 2, 1, COL_CAT_PINK);
-    fb_fill_circle(cx, cy - 4, 1, COL_CAT_PINK);
-    fb_fill_circle(cx + 3, cy - 2, 1, COL_CAT_PINK);
+    fb_fill_ellipse(cx, cy + 1, 3, 2, COL_CHEEK_PINK);
+    fb_fill_circle(cx - 3, cy - 2, 1, COL_CHEEK_PINK);
+    fb_fill_circle(cx, cy - 4, 1, COL_CHEEK_PINK);
+    fb_fill_circle(cx + 3, cy - 2, 1, COL_CHEEK_PINK);
 }
 
 static void render_cat_paws(int base_y, face_state_t state)
 {
     switch (state) {
         case FACE_EXCITED:
-        case FACE_HAPPY:
+        case FACE_HAPPY_BIG:
             // Both paws raised up waving happily!
-            draw_single_paw(34, base_y + 38, true);
-            draw_single_paw(94, base_y + 38, true);
+            draw_single_paw(34, base_y + 36, true);
+            draw_single_paw(94, base_y + 36, true);
             break;
 
         case FACE_SURPRISED:
             // Paws brought up to cheeks ("gasp" / surprised)
-            draw_single_paw(44, base_y + 18, true);
-            draw_single_paw(84, base_y + 18, true);
+            draw_single_paw(42, base_y + 16, true);
+            draw_single_paw(86, base_y + 16, true);
+            break;
+
+        case FACE_CONFUSED:
+            // One paw touching chin in deep puzzlement!
+            draw_single_paw(42, base_y + 46, false);
+            draw_single_paw(70, base_y + 22, true);
+            break;
+
+        case FACE_CURIOUS_L:
+            // Left paw raised inquisitive
+            draw_single_paw(36, base_y + 36, true);
+            draw_single_paw(84, base_y + 46, false);
+            break;
+
+        case FACE_CURIOUS_R:
+            // Right paw raised inquisitive
+            draw_single_paw(44, base_y + 46, false);
+            draw_single_paw(92, base_y + 36, true);
             break;
 
         case FACE_SQUINT:
         case FACE_WINK_LEFT:
-        case FACE_WINK_RIGHT:
-        case FACE_PLAYFUL:
-            // One paw raised waving, one paw resting
             draw_single_paw(34, base_y + 36, true);
-            draw_single_paw(86, base_y + 48, false);
+            draw_single_paw(84, base_y + 46, false);
             break;
 
-        case FACE_CONFUSED:
-            // One paw touching chin in deep thought!
-            draw_single_paw(40, base_y + 48, false);
-            draw_single_paw(70, base_y + 24, true);
+        case FACE_WINK_RIGHT:
+        case FACE_PLAYFUL:
+            draw_single_paw(44, base_y + 46, false);
+            draw_single_paw(94, base_y + 36, true);
+            break;
+
+        case FACE_THINKING:
+            // Right paw slightly lifted toward chin
+            draw_single_paw(44, base_y + 46, false);
+            draw_single_paw(78, base_y + 34, true);
             break;
 
         case FACE_SLEEPY:
             // Resting peacefully on soft pink cushion pillow
-            fb_fill_rounded_rect(24, base_y + 44, 80, 16, 6, COL_CAT_PILLOW);
-            fb_draw_circle(24, base_y + 52, 6, COL_CAT_DEEP_PINK);
+            fb_fill_rounded_rect(24, base_y + 44, 80, 16, 6, COL_PILLOW);
+            fb_draw_circle(24, base_y + 52, 6, COL_BOW_SHADOW);
             draw_single_paw(54, base_y + 48, false);
             draw_single_paw(74, base_y + 48, false);
             break;
@@ -1315,12 +1728,82 @@ static void render_cat_paws(int base_y, face_state_t state)
         case FACE_NEUTRAL:
         case FACE_RECOVERED:
         case FACE_LISTENING:
-        case FACE_THINKING:
         case FACE_SPEAKING:
+        case FACE_HAPPY:
+        case FACE_OFFLINE:
         default:
             // Resting peacefully in front of chest
             draw_single_paw(44, base_y + 46, false);
             draw_single_paw(84, base_y + 46, false);
+            break;
+    }
+}
+
+// -------------------------------------------------------------
+// Kawaii Cat Emotional Embellishments (Sweat drop, ?, !, Zzz, Hearts)
+// -------------------------------------------------------------
+static void render_cat_decorations(int base_y, face_state_t state, int64_t now_ms)
+{
+    switch (state) {
+        case FACE_CONFUSED:
+            // Floating '?' question mark above right head
+            fb_draw_question_mark(88, base_y - 28, 9, COL_BOW_PINK);
+            break;
+
+        case FACE_SURPRISED:
+            // Floating '!' surprise exclamation mark above head
+            fb_draw_exclamation_mark(88, base_y - 28, 9, COL_BOW_PINK);
+            break;
+
+        case FACE_THINKING: {
+            // 3 glowing thought dots floating near right ear
+            float pulse = 0.5f + 0.5f * sinf((float)now_ms * 0.008f);
+            uint16_t col = (pulse > 0.5f) ? COL_SPARKLE : COL_SPARKLE_SOFT;
+            fb_fill_circle(88, base_y - 18, 2, col);
+            fb_fill_circle(93, base_y - 25, 3, col);
+            fb_fill_circle(99, base_y - 33, 4, col);
+            break;
+        }
+
+        case FACE_ERROR:
+        case FACE_SAD:
+            // Apologetic kawaii sweat drop on forehead
+            fb_draw_sweat_drop(44, base_y - 12, 5, RGB565_BE(140, 205, 255));
+            break;
+
+        case FACE_ANGRY:
+            // Anime pop-vein anger mark 💢 above left ear
+            fb_draw_anger_mark(36, base_y - 26, 4, RGB565_BE(235, 60, 60));
+            break;
+
+        case FACE_HAPPY_BIG:
+        case FACE_LOVE: {
+            // Floating hearts
+            float drift = fmodf((float)now_ms * 0.02f, 20.0f);
+            fb_draw_heart(92, base_y - 22 - (int)drift, 5, COL_BOW_PINK);
+            fb_draw_heart(32, base_y - 16 - (int)(drift * 0.7f), 4, COL_CHEEK_PINK);
+            break;
+        }
+
+        case FACE_SLEEPY: {
+            // Floating 'zzz'
+            float drift = fmodf((float)now_ms * 0.015f, 24.0f);
+            fb_draw_zzz(90, base_y - 18 - (int)drift, 1, COL_FUR_SHADOW);
+            fb_draw_zzz(96, base_y - 28 - (int)(drift * 0.8f), 2, COL_FUR_SHADOW);
+            break;
+        }
+
+        case FACE_SQUINT:
+            // Sweet pastel candy floating near paw
+            fb_draw_candy(88, base_y + 24, COL_CHEEK_PINK, COL_BOW_HIGHLIGHT);
+            break;
+
+        case FACE_RECOVERED:
+            // Fresh green spring leaf floating near ear
+            fb_draw_leaf(88, base_y - 24, 4, 2, RGB565_BE(120, 220, 140));
+            break;
+
+        default:
             break;
     }
 }
@@ -1335,46 +1818,50 @@ static void render_status_banner(face_state_t state)
     const int bw = 112;
     const int bh = 14;
 
-    uint16_t pill_col = COL_CAT_PINK;
+    uint16_t pill_col = COL_BOW_PINK;
     const char *label = "READY";
 
     if (s_demo_active) {
         switch (state) {
-            case FACE_EXCITED:    pill_col = RGB565_BE(255, 120, 180); label = "1. EXCITED"; break;
-            case FACE_SURPRISED:  pill_col = RGB565_BE(255, 100, 170); label = "2. SURPRISED"; break;
-            case FACE_SQUINT:     pill_col = RGB565_BE(70,  180, 245); label = "3. SQUINT"; break;
-            case FACE_WINK_LEFT:  pill_col = RGB565_BE(60,  210, 170); label = "4. WINK L"; break;
-            case FACE_WINK_RIGHT: pill_col = RGB565_BE(255, 140, 90);  label = "5. WINK R"; break;
-            case FACE_CONFUSED:   pill_col = RGB565_BE(160, 120, 245); label = "6. CONFUSED"; break;
-            case FACE_SLEEPY:     pill_col = RGB565_BE(70,  80,  160); label = "7. SLEEPY"; break;
-            case FACE_SAD:        pill_col = RGB565_BE(230, 50,  70);  label = "8. ERROR SAD"; break;
-            case FACE_HAPPY:      pill_col = RGB565_BE(255, 90,  160); label = "9. HAPPY"; break;
-            case FACE_RECOVERED:  pill_col = RGB565_BE(40,  190, 180); label = "10. RECOVERED"; break;
-            case FACE_NEUTRAL:    pill_col = RGB565_BE(80,  160, 240); label = "11. NEUTRAL"; break;
-            case FACE_LISTENING:  pill_col = RGB565_BE(40,  210, 220); label = "12. LISTENING"; break;
-            case FACE_THINKING:   pill_col = RGB565_BE(245, 170, 40);  label = "13. THINKING"; break;
-            case FACE_SPEAKING:   pill_col = RGB565_BE(255, 120, 160); label = "14. SPEAKING"; break;
-            case FACE_BLINK:      pill_col = RGB565_BE(100, 170, 240); label = "15. BLINK"; break;
-            case FACE_CURIOUS:    pill_col = RGB565_BE(170, 130, 245); label = "16. CURIOUS"; break;
-            case FACE_ANGRY:      pill_col = RGB565_BE(235, 60,  60);  label = "17. ANGRY"; break;
-            case FACE_LOVE:       pill_col = RGB565_BE(255, 60,  130); label = "18. LOVE"; break;
-            case FACE_PLAYFUL:    pill_col = RGB565_BE(255, 130, 180); label = "19. PLAYFUL"; break;
-            case FACE_ERROR:      pill_col = RGB565_BE(235, 50,  50);  label = "20. ERROR"; break;
-            default:              pill_col = COL_CAT_PINK;             label = "RBOT CAT"; break;
+            case FACE_EXCITED:      pill_col = RGB565_BE(255, 120, 180); label = "1. EXCITED"; break;
+            case FACE_SURPRISED:    pill_col = RGB565_BE(255, 100, 170); label = "2. SURPRISED"; break;
+            case FACE_SQUINT:       pill_col = RGB565_BE(70,  180, 245); label = "3. SQUINT"; break;
+            case FACE_WINK_LEFT:    pill_col = RGB565_BE(60,  210, 170); label = "4. WINK L"; break;
+            case FACE_WINK_RIGHT:   pill_col = RGB565_BE(255, 140, 90);  label = "5. WINK R"; break;
+            case FACE_CONFUSED:     pill_col = RGB565_BE(160, 120, 245); label = "6. CONFUSED"; break;
+            case FACE_SLEEPY:       pill_col = RGB565_BE(70,  80,  160); label = "7. SLEEPY"; break;
+            case FACE_SAD:          pill_col = RGB565_BE(230, 50,  70);  label = "8. ERROR SAD"; break;
+            case FACE_HAPPY:        pill_col = RGB565_BE(255, 90,  160); label = "9. HAPPY"; break;
+            case FACE_HAPPY_BIG:    pill_col = RGB565_BE(255, 80,  150); label = "10. HAPPY BIG"; break;
+            case FACE_RECOVERED:    pill_col = RGB565_BE(40,  190, 180); label = "11. RECOVERED"; break;
+            case FACE_NEUTRAL:      pill_col = RGB565_BE(80,  160, 240); label = "12. NEUTRAL"; break;
+            case FACE_LISTENING:    pill_col = RGB565_BE(40,  210, 220); label = "13. LISTENING"; break;
+            case FACE_THINKING:     pill_col = RGB565_BE(245, 170, 40);  label = "14. THINKING"; break;
+            case FACE_SPEAKING:     pill_col = RGB565_BE(255, 120, 160); label = "15. SPEAKING"; break;
+            case FACE_BLINK:        pill_col = RGB565_BE(100, 170, 240); label = "16. BLINK"; break;
+            case FACE_CURIOUS_L:    pill_col = RGB565_BE(170, 130, 245); label = "17. CURIOUS L"; break;
+            case FACE_CURIOUS_R:    pill_col = RGB565_BE(170, 130, 245); label = "18. CURIOUS R"; break;
+            case FACE_ANGRY:        pill_col = RGB565_BE(235, 60,  60);  label = "19. ANGRY"; break;
+            case FACE_LOVE:         pill_col = RGB565_BE(255, 60,  130); label = "20. LOVE"; break;
+            case FACE_PLAYFUL:      pill_col = RGB565_BE(255, 130, 180); label = "21. PLAYFUL"; break;
+            case FACE_ERROR:        pill_col = RGB565_BE(235, 50,  50);  label = "22. ERROR"; break;
+            case FACE_DISCONNECTED: pill_col = RGB565_BE(160, 130, 180); label = "23. OFFLINE"; break;
+            default:                pill_col = COL_BOW_PINK;             label = "RBOT CAT"; break;
         }
     } else if (s_custom_status[0] != '\0') {
         label = s_custom_status;
-        pill_col = COL_CAT_DARK_NAVY;
+        pill_col = COL_EYE_OUTER;
     } else {
         switch (state) {
             case FACE_BOOT:         label = "RBOT CAT"; pill_col = RGB565_BE(80, 180, 240); break;
-            case FACE_IDLE:         label = s_is_sleepy ? "SLEEPY..." : "READY"; pill_col = s_is_sleepy ? RGB565_BE(70, 80, 160) : COL_CAT_PINK; break;
+            case FACE_IDLE:         label = s_is_sleepy ? "SLEEPY..." : "READY"; pill_col = s_is_sleepy ? RGB565_BE(70, 80, 160) : COL_BOW_PINK; break;
             case FACE_LISTENING:    label = "LISTENING"; pill_col = RGB565_BE(40, 210, 220); break;
             case FACE_THINKING:     label = "THINKING"; pill_col = RGB565_BE(245, 170, 40); break;
             case FACE_SPEAKING:     label = "SPEAKING"; pill_col = RGB565_BE(255, 120, 160); break;
             case FACE_HAPPY:        label = "HAPPY :)"; pill_col = RGB565_BE(255, 90, 160); break;
+            case FACE_HAPPY_BIG:    label = "JOY :D"; pill_col = RGB565_BE(255, 80, 150); break;
             case FACE_ERROR:        label = (s_error_msg[0] != '\0') ? s_error_msg : "ERROR"; pill_col = RGB565_BE(235, 50, 50); break;
-            case FACE_DISCONNECTED: label = "OFFLINE"; pill_col = RGB565_BE(220, 120, 40); break;
+            case FACE_DISCONNECTED: label = "OFFLINE"; pill_col = RGB565_BE(160, 130, 180); break;
             case FACE_EXCITED:      label = "EXCITED"; pill_col = RGB565_BE(255, 120, 180); break;
             case FACE_SURPRISED:    label = "SURPRISED"; pill_col = RGB565_BE(255, 100, 170); break;
             case FACE_SQUINT:       label = "SQUINT"; pill_col = RGB565_BE(70, 180, 245); break;
@@ -1384,26 +1871,27 @@ static void render_status_banner(face_state_t state)
             case FACE_SLEEPY:       label = "SLEEPY"; pill_col = RGB565_BE(70, 80, 160); break;
             case FACE_SAD:          label = "SAD"; pill_col = RGB565_BE(230, 50, 70); break;
             case FACE_RECOVERED:    label = "RECOVERED"; pill_col = RGB565_BE(40, 190, 180); break;
-            case FACE_NEUTRAL:      label = "READY"; pill_col = COL_CAT_PINK; break;
-            case FACE_CURIOUS:      label = "CURIOUS"; pill_col = RGB565_BE(170, 130, 245); break;
+            case FACE_NEUTRAL:      label = "READY"; pill_col = COL_BOW_PINK; break;
+            case FACE_CURIOUS_L:    label = "CURIOUS L"; pill_col = RGB565_BE(170, 130, 245); break;
+            case FACE_CURIOUS_R:    label = "CURIOUS R"; pill_col = RGB565_BE(170, 130, 245); break;
             case FACE_ANGRY:        label = "ANGRY"; pill_col = RGB565_BE(235, 60, 60); break;
             case FACE_LOVE:         label = "LOVE <3"; pill_col = RGB565_BE(255, 60, 130); break;
             case FACE_PLAYFUL:      label = "PLAYFUL"; pill_col = RGB565_BE(255, 130, 180); break;
-            default:                label = "READY"; pill_col = COL_CAT_PINK; break;
+            default:                label = "READY"; pill_col = COL_BOW_PINK; break;
         }
     }
 
     // Draw Rounded Pill Background
     fb_fill_rounded_rect(bx, by, bw, bh, 7, pill_col);
     // Draw Subtle White Outline
-    fb_draw_circle(bx + 7, by + 7, 7, COL_CAT_WHITE);
-    fb_draw_circle(bx + bw - 8, by + 7, 7, COL_CAT_WHITE);
-    fb_draw_line(bx + 7, by, bx + bw - 8, by, COL_CAT_WHITE);
-    fb_draw_line(bx + 7, by + bh - 1, bx + bw - 8, by + bh - 1, COL_CAT_WHITE);
+    fb_draw_circle(bx + 7, by + 7, 7, COL_FUR_HIGHLIGHT);
+    fb_draw_circle(bx + bw - 8, by + 7, 7, COL_FUR_HIGHLIGHT);
+    fb_draw_line(bx + 7, by, bx + bw - 8, by, COL_FUR_HIGHLIGHT);
+    fb_draw_line(bx + 7, by + bh - 1, bx + bw - 8, by + bh - 1, COL_FUR_HIGHLIGHT);
 
     // Draw Centered Label
     int text_y = by + (bh - 5) / 2;
-    fb_draw_text_centered(text_y, label, COL_CAT_WHITE, 1);
+    fb_draw_text_centered(text_y, label, COL_FUR_HIGHLIGHT, 1);
 }
 
 // -------------------------------------------------------------
@@ -1416,27 +1904,30 @@ static void demo_mode_tick(int64_t now_ms)
     if (now_ms >= s_demo_step_until_ms) {
         s_demo_step++;
         switch (s_demo_step) {
-            case 1:  s_current_state = FACE_EXCITED;    s_demo_step_until_ms = now_ms + 2200; break;
-            case 2:  s_current_state = FACE_SURPRISED;  s_demo_step_until_ms = now_ms + 2200; break;
-            case 3:  s_current_state = FACE_SQUINT;     s_demo_step_until_ms = now_ms + 2200; break;
-            case 4:  s_current_state = FACE_WINK_LEFT;  s_demo_step_until_ms = now_ms + 2000; break;
-            case 5:  s_current_state = FACE_WINK_RIGHT; s_demo_step_until_ms = now_ms + 2000; break;
-            case 6:  s_current_state = FACE_CONFUSED;   s_demo_step_until_ms = now_ms + 2400; break;
-            case 7:  s_current_state = FACE_SLEEPY;     s_demo_step_until_ms = now_ms + 2400; break;
-            case 8:  s_current_state = FACE_SAD;        s_demo_step_until_ms = now_ms + 2400; break;
-            case 9:  s_current_state = FACE_HAPPY;      s_demo_step_until_ms = now_ms + 2200; break;
-            case 10: s_current_state = FACE_RECOVERED;  s_demo_step_until_ms = now_ms + 2200; break;
-            case 11: s_current_state = FACE_NEUTRAL;    s_demo_step_until_ms = now_ms + 2000; break;
-            case 12: s_current_state = FACE_LISTENING;  s_demo_step_until_ms = now_ms + 2200; break;
-            case 13: s_current_state = FACE_THINKING;   s_demo_step_until_ms = now_ms + 2400; break;
-            case 14: s_current_state = FACE_SPEAKING;   s_demo_step_until_ms = now_ms + 2200; break;
-            case 15: s_current_state = FACE_BLINK;      s_demo_step_until_ms = now_ms + 1600; break;
-            case 16: s_current_state = FACE_CURIOUS;    s_demo_step_until_ms = now_ms + 2200; break;
-            case 17: s_current_state = FACE_ANGRY;      s_demo_step_until_ms = now_ms + 2200; break;
-            case 18: s_current_state = FACE_LOVE;       s_demo_step_until_ms = now_ms + 2400; break;
-            case 19: s_current_state = FACE_PLAYFUL;    s_demo_step_until_ms = now_ms + 2200; break;
-            case 20: s_current_state = FACE_ERROR;      s_demo_step_until_ms = now_ms + 2400; break;
-            case 21:
+            case 1:  s_current_state = FACE_EXCITED;      s_demo_step_until_ms = now_ms + 2200; break;
+            case 2:  s_current_state = FACE_SURPRISED;    s_demo_step_until_ms = now_ms + 2200; break;
+            case 3:  s_current_state = FACE_SQUINT;       s_demo_step_until_ms = now_ms + 2200; break;
+            case 4:  s_current_state = FACE_WINK_LEFT;    s_demo_step_until_ms = now_ms + 2000; break;
+            case 5:  s_current_state = FACE_WINK_RIGHT;   s_demo_step_until_ms = now_ms + 2000; break;
+            case 6:  s_current_state = FACE_CONFUSED;     s_demo_step_until_ms = now_ms + 2400; break;
+            case 7:  s_current_state = FACE_SLEEPY;       s_demo_step_until_ms = now_ms + 2400; break;
+            case 8:  s_current_state = FACE_SAD;          s_demo_step_until_ms = now_ms + 2400; break;
+            case 9:  s_current_state = FACE_HAPPY;        s_demo_step_until_ms = now_ms + 2200; break;
+            case 10: s_current_state = FACE_HAPPY_BIG;    s_demo_step_until_ms = now_ms + 2200; break;
+            case 11: s_current_state = FACE_RECOVERED;    s_demo_step_until_ms = now_ms + 2200; break;
+            case 12: s_current_state = FACE_NEUTRAL;      s_demo_step_until_ms = now_ms + 2000; break;
+            case 13: s_current_state = FACE_LISTENING;    s_demo_step_until_ms = now_ms + 2200; break;
+            case 14: s_current_state = FACE_THINKING;     s_demo_step_until_ms = now_ms + 2400; break;
+            case 15: s_current_state = FACE_SPEAKING;     s_demo_step_until_ms = now_ms + 2200; break;
+            case 16: s_current_state = FACE_BLINK;        s_demo_step_until_ms = now_ms + 1600; break;
+            case 17: s_current_state = FACE_CURIOUS_L;    s_demo_step_until_ms = now_ms + 2200; break;
+            case 18: s_current_state = FACE_CURIOUS_R;    s_demo_step_until_ms = now_ms + 2200; break;
+            case 19: s_current_state = FACE_ANGRY;        s_demo_step_until_ms = now_ms + 2200; break;
+            case 20: s_current_state = FACE_LOVE;         s_demo_step_until_ms = now_ms + 2400; break;
+            case 21: s_current_state = FACE_PLAYFUL;      s_demo_step_until_ms = now_ms + 2200; break;
+            case 22: s_current_state = FACE_ERROR;        s_demo_step_until_ms = now_ms + 2400; break;
+            case 23: s_current_state = FACE_DISCONNECTED; s_demo_step_until_ms = now_ms + 2200; break;
+            case 24:
             default:
                 s_current_state = FACE_IDLE;
                 s_demo_active = false;
@@ -1472,6 +1963,11 @@ static void face_task(void *arg)
         // 2. Demo & Timed Hold management
         if (s_demo_active) {
             demo_mode_tick(now_ms);
+        } else if (s_current_state == FACE_BOOT) {
+            int64_t boot_elapsed = now_ms - s_boot_start_ms;
+            if (boot_elapsed > 2600) {
+                s_current_state = FACE_IDLE;
+            }
         } else if (s_timed_hold_until_ms > 0 && now_ms >= s_timed_hold_until_ms) {
             s_timed_hold_until_ms = 0;
             s_current_state = FACE_IDLE;
@@ -1489,7 +1985,7 @@ static void face_task(void *arg)
         float blink_factor = 1.0f;
         if (s_current_state == FACE_BLINK) {
             blink_factor = 0.0f;
-        } else if (!s_is_sleepy && s_current_state != FACE_SLEEPY && s_current_state != FACE_HAPPY) {
+        } else if (!s_is_sleepy && s_current_state != FACE_SLEEPY && s_current_state != FACE_HAPPY_BIG) {
             if (!s_blink_active && now_ms >= s_next_blink_ms) {
                 s_blink_active = true;
                 s_blink_start_ms = now_ms;
@@ -1535,7 +2031,7 @@ static void face_task(void *arg)
 
         // 6. Gentle Idle Bobbing Movement (Breathing)
         int bob_y = 0;
-        if (s_current_state == FACE_EXCITED || s_current_state == FACE_HAPPY) {
+        if (s_current_state == FACE_EXCITED || s_current_state == FACE_HAPPY || s_current_state == FACE_HAPPY_BIG) {
             bob_y = (int)roundf(sinf(time_sec * 6.0f) * 1.8f);
         } else if (s_current_state != FACE_SLEEPY && !s_is_sleepy) {
             bob_y = (int)roundf(sinf(time_sec * 2.5f) * 1.0f);
@@ -1556,25 +2052,31 @@ static void face_task(void *arg)
         // Layer 2: Top Connectivity & Battery Header
         render_header(now_ms);
 
-        // Layer 3: Headband & Outer Ears
+        // Layer 3: Connected Outer Ears & Volumetric Pink Bow
         render_cat_ears_and_bow(base_y, effective_state);
 
-        // Layer 4: Torso, Red Collar & Golden Bell
+        // Layer 4: Torso, Pink Collar & Golden Bell
         render_cat_body(base_y, effective_state);
 
-        // Layer 5: Chibi Head & Cyber Headphones
+        // Layer 5: Chibi Head with Pseudo-3D Shading & Cheeks
         render_cat_head(base_y, effective_state);
 
         // Layer 6: Expressive Anime Eyes
         render_cat_eyes(base_y, effective_state, blink_factor);
 
-        // Layer 7: Cat Nose & Animated Mouth
+        // Layer 7: Emotional Eyebrows
+        render_cat_eyebrows(base_y, effective_state);
+
+        // Layer 8: Cat Nose & Animated Mouth
         render_cat_mouth(base_y, effective_state, now_ms);
 
-        // Layer 8: Cute Cat Paws
+        // Layer 9: Cute Cat Paws & Gestures
         render_cat_paws(base_y, effective_state);
 
-        // Layer 9: Bottom Rounded Pill Status Banner
+        // Layer 10: State-Specific Emotional Embellishments (Sweat drop, ?, !, Zzz, Hearts)
+        render_cat_decorations(base_y, effective_state, now_ms);
+
+        // Layer 11: Bottom Rounded Pill Status Banner
         render_status_banner(effective_state);
 
         // 7. Sleepy Screen Dimming (50% reduction if SLEEPY, wake word remains 100% active)
@@ -1643,6 +2145,7 @@ esp_err_t board_face_init(board_display_t *disp)
     }
 
     s_state_start_ms = esp_timer_get_time() / 1000;
+    s_boot_start_ms = s_state_start_ms;
     s_last_interaction_ms = s_state_start_ms;
     s_current_state = FACE_BOOT;
 
@@ -1709,7 +2212,7 @@ void board_face_trigger_happy(uint32_t duration_ms)
 
 void board_face_trigger_happy_big(uint32_t duration_ms)
 {
-    board_face_trigger_expression(FACE_HAPPY, duration_ms);
+    board_face_trigger_expression(FACE_HAPPY_BIG, duration_ms);
 }
 
 void board_face_trigger_squint(uint32_t duration_ms)
@@ -1744,7 +2247,7 @@ void board_face_trigger_sad(uint32_t duration_ms)
 
 void board_face_trigger_curious(bool left_larger, uint32_t duration_ms)
 {
-    board_face_trigger_expression(FACE_CURIOUS, duration_ms);
+    board_face_trigger_expression(left_larger ? FACE_CURIOUS_L : FACE_CURIOUS_R, duration_ms);
 }
 
 void board_face_trigger_confused(uint32_t duration_ms)

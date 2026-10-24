@@ -30,7 +30,8 @@ AISTUDIO_API_KEY = (os.getenv("AISTUDIO_API_KEY") or "").strip()
 BRAVE_API_KEY = (os.getenv("BRAVE_API_KEY") or "").strip()
 
 GEMINI_MODEL = "gemini-3.5-flash-lite"
-TTS_VOICE = "id-ID-ArdiNeural"
+TTS_VOICE = (os.getenv("TTS_VOICE") or "id-ID-GadisNeural").strip()
+TTS_VOLUME_BOOST = float(os.getenv("TTS_VOLUME_BOOST", "1.30"))
 TARGET_SAMPLE_RATE = 16000
 
 # Initialize Gemini Client
@@ -134,6 +135,10 @@ def transcribe_gemini(audio_bytes: bytes) -> str:
             types.Part.from_bytes(data=audio_bytes, mime_type="audio/wav"),
             prompt,
         ],
+        config=types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(thinking_level="minimal"),
+            temperature=0.0,
+        ),
     )
     return res.text.strip() if res.text else ""
 
@@ -319,21 +324,21 @@ def search_web(query: str) -> str:
 
 def generate_llm_response(prompt_text: str, session_id: str = "") -> str:
     history = session_manager.get_history(session_id)
-    contents = list(history)
-    contents.append(
-        types.Content(role="user", parts=[types.Part.from_text(text=prompt_text)])
+    
+    config = types.GenerateContentConfig(
+        system_instruction=get_system_instruction(),
+        tools=[search_web],
+        max_output_tokens=160,
+        temperature=0.7,
+        thinking_config=types.ThinkingConfig(thinking_level="minimal"),
     )
 
-    res = gemini_client.models.generate_content(
+    chat = gemini_client.chats.create(
         model=GEMINI_MODEL,
-        contents=contents,
-        config=types.GenerateContentConfig(
-            system_instruction=get_system_instruction(),
-            tools=[search_web],
-            max_output_tokens=160,
-            temperature=0.7,
-        ),
+        config=config,
+        history=history,
     )
+    res = chat.send_message(prompt_text)
     bot_reply = res.text.strip() if res.text else ""
     if not bot_reply:
         bot_reply = "Halo, saya R-bot. Ada yang bisa saya bantu?"
@@ -355,7 +360,9 @@ def tts_azure(text: str, voice: str = TTS_VOICE) -> bytes:
         "User-Agent": "rbots-backend",
     }
     safe_text = escape(text)
-    ssml = f"""<speak version='1.0' xml:lang='id-ID'><voice name='{voice}'>{safe_text}</voice></speak>"""
+    vol_pct = int(round((TTS_VOLUME_BOOST - 1.0) * 100))
+    vol_attr = f" volume='+{vol_pct}%'" if vol_pct > 0 else ""
+    ssml = f"""<speak version='1.0' xml:lang='id-ID'><voice name='{voice}'><prosody{vol_attr}>{safe_text}</prosody></voice></speak>"""
     resp = requests.post(url, headers=headers, data=ssml.encode("utf-8"), timeout=15)
     if resp.status_code != 200:
         raise RuntimeError(f"Azure TTS failed {resp.status_code}: {resp.text[:200]}")
@@ -371,6 +378,7 @@ async def tts_edge(text: str, voice: str = TTS_VOICE) -> bytes:
     wav_path = mp3_path.replace(".mp3", ".wav")
     cmd = [
         "ffmpeg", "-y", "-i", mp3_path,
+        "-filter:a", f"volume={TTS_VOLUME_BOOST}",
         "-ar", str(TARGET_SAMPLE_RATE),
         "-ac", "1",
         "-c:a", "pcm_s16le",
@@ -398,8 +406,46 @@ async def synthesize_speech(text: str) -> tuple[bytes, str]:
         except Exception as e:
             print(f"[TTS] Azure TTS failed ({e}), falling back to Edge-TTS...")
     
-    wav = await tts_edge(text)
-    return wav, "edge_tts"
+    try:
+        wav = await tts_edge(text)
+        return wav, "edge_tts"
+    except Exception as e:
+        print(f"[TTS] Edge-TTS failed ({e}), falling back to gTTS...")
+        try:
+            wav = tts_gtts(text)
+            return wav, "gtts"
+        except Exception as e2:
+            print(f"[TTS] gTTS fallback failed ({e2})")
+            raise e
+
+
+def tts_gtts(text: str, lang: str = "id") -> bytes:
+    from gtts import gTTS
+    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as mp3_f:
+        mp3_path = mp3_f.name
+    tts = gTTS(text=text, lang=lang)
+    tts.save(mp3_path)
+
+    wav_path = mp3_path.replace(".mp3", ".wav")
+    cmd = [
+        "ffmpeg", "-y", "-i", mp3_path,
+        "-filter:a", f"volume={TTS_VOLUME_BOOST}",
+        "-ar", str(TARGET_SAMPLE_RATE),
+        "-ac", "1",
+        "-c:a", "pcm_s16le",
+        wav_path,
+    ]
+    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+    with open(wav_path, "rb") as f:
+        wav_data = f.read()
+
+    try:
+        os.remove(mp3_path)
+        os.remove(wav_path)
+    except Exception:
+        pass
+
+    return wav_data
 
 
 # --- Helpers: Ensure WAV Header ---
@@ -506,8 +552,33 @@ async def chat_voice(request: Request):
     response_wav, tts_engine = await synthesize_speech(bot_reply)
     t_tts = int((time.monotonic() - t_tts_0) * 1000)
     t_total = int((time.monotonic() - t_start) * 1000)
-    print(f"[TTS - {tts_engine.upper()}] ({t_tts}ms): {len(response_wav)} bytes WAV")
-    print(f"[TOTAL LATENCY] {t_total}ms (STT: {t_stt}ms, LLM: {t_llm}ms, TTS: {t_tts}ms)\n")
+
+    # Bottleneck analysis & formatted latency report
+    stages = [("STT", t_stt), ("LLM", t_llm), ("TTS", t_tts)]
+    bottleneck_name, bottleneck_time = max(stages, key=lambda s: s[1])
+    bottleneck_pct = (bottleneck_time / t_total * 100.0) if t_total > 0 else 0.0
+
+    stt_pct = (t_stt / t_total * 100.0) if t_total > 0 else 0.0
+    llm_pct = (t_llm / t_total * 100.0) if t_total > 0 else 0.0
+    tts_pct = (t_tts / t_total * 100.0) if t_total > 0 else 0.0
+    vol_str = f"+{int((TTS_VOLUME_BOOST-1.0)*100)}%"
+
+    line_tts = f"│ 🔊  TTS  ({tts_engine.upper():<6}) : {t_tts:>6,} ms  [ {tts_pct:>5.1f}% ] (vol {vol_str})"
+    line_tts = f"{line_tts:<57}│"
+
+    log_box = (
+        f"\n┌────────────────────────────────────────────────────────┐\n"
+        f"│ ⏱️  RBOT PIPELINE LATENCY BENCHMARK                    │\n"
+        f"├────────────────────────────────────────────────────────┤\n"
+        f"│ 🎙️  STT  ({stt_engine.upper():<6}) : {t_stt:>6,} ms  [ {stt_pct:>5.1f}% ]            │\n"
+        f"│ 🧠  LLM  (GEMINI) : {t_llm:>6,} ms  [ {llm_pct:>5.1f}% ]            │\n"
+        f"{line_tts}\n"
+        f"├────────────────────────────────────────────────────────┤\n"
+        f"│ 🚀  TOTAL DURATION: {t_total:>6,} ms                         │\n"
+        f"│ ⚠️  BOTTLENECK    : {bottleneck_name} ({bottleneck_time:,} ms, {bottleneck_pct:.1f}%)               │\n"
+        f"└────────────────────────────────────────────────────────┘\n"
+    )
+    print(log_box)
 
     return Response(
         content=response_wav,

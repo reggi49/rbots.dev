@@ -40,6 +40,7 @@
 #include "selftest.h"
 #include "voice_chat.h"
 #include "wake_word_sr.h"
+#include "rbot_ble.h"
 
 #define TAG_STATE "STATE"
 #define TAG_FEATURE "FEATURE"
@@ -1123,10 +1124,12 @@ static void cli_task(void *arg) {
                     else if (strstr(sp, "CONFUSED") || strstr(sp, "confused")) board_face_trigger_confused(2500);
                     else if (strstr(sp, "SLEEP") || strstr(sp, "sleep")) board_face_trigger_sleepy();
                     else if (strstr(sp, "SAD") || strstr(sp, "sad")) board_face_trigger_sad(2500);
-                    else if (strstr(sp, "HAPPY_BIG") || strstr(sp, "happy_big") || strstr(sp, "HAPPY") || strstr(sp, "happy")) board_face_trigger_happy(2500);
+                    else if (strstr(sp, "HAPPY_BIG") || strstr(sp, "happy_big")) board_face_trigger_happy_big(2500);
+                    else if (strstr(sp, "HAPPY") || strstr(sp, "happy")) board_face_trigger_happy(2500);
                     else if (strstr(sp, "RECOVERED") || strstr(sp, "recovered") || strstr(sp, "RECOVER") || strstr(sp, "recover")) board_face_trigger_recovered(2500);
                     else if (strstr(sp, "BLINK") || strstr(sp, "blink")) board_face_trigger_expression(FACE_BLINK, 1000);
-                    else if (strstr(sp, "CURIOUS") || strstr(sp, "curious")) board_face_trigger_curious(false, 2500);
+                    else if (strstr(sp, "CURIOUS_R") || strstr(sp, "curious_r")) board_face_trigger_curious(false, 2500);
+                    else if (strstr(sp, "CURIOUS_L") || strstr(sp, "curious_l") || strstr(sp, "CURIOUS") || strstr(sp, "curious")) board_face_trigger_curious(true, 2500);
                     else if (strstr(sp, "ANGRY") || strstr(sp, "angry")) board_face_trigger_angry(2500);
                     else if (strstr(sp, "LOVE") || strstr(sp, "love")) board_face_trigger_love(2500);
                     else if (strstr(sp, "PLAYFUL") || strstr(sp, "playful")) board_face_trigger_playful(2500);
@@ -1314,15 +1317,14 @@ void app_main(void)
     esp_rom_printf("✅ [APP_MAIN] Audio init OK\r\n");
     ESP_LOGI("MAIN", "Audio init OK");
     
-    // 4. Setup Touch Sensor (GPIO 14)
-    gpio_config_t touch_cfg = {
-        .pin_bit_mask = (1ULL << PIN_TOUCH),
-        .mode = GPIO_MODE_INPUT,
-        .pull_up_en = GPIO_PULLUP_ENABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_DISABLE,
-    };
-    gpio_config(&touch_cfg);
+    // 4. Initialize R-bot BLE GATT Service (NimBLE)
+    esp_rom_printf("[APP_MAIN] Initializing R-bot BLE GATT Service...\r\n");
+    esp_err_t ble_err = rbot_ble_init();
+    if (ble_err == ESP_OK) {
+        esp_rom_printf("✅ [APP_MAIN] R-bot BLE GATT Service initialized\r\n");
+    } else {
+        esp_rom_printf("⚠️ [APP_MAIN] BLE init returned: %d\r\n", ble_err);
+    }
 
     // 5. Setup Unified Interaction Task & Queue
     s_turn_queue = xQueueCreate(2, sizeof(turn_request_t));
@@ -1347,32 +1349,10 @@ void app_main(void)
     xTaskCreate(server_health_task, "srv_health", 4096, NULL, 3, NULL);
     esp_rom_printf("✅ [APP_MAIN] Server health monitor task started!\r\n");
 
-    ESP_LOGI("MAIN", "\n*** Rbot ready! Say '%s' or send 'TALK' / touch GPIO 14 ***\n", wake_word_sr_get_word_name());
+    ESP_LOGI("MAIN", "\n*** Rbot ready! Say '%s' or send 'TALK' via CLI / BLE ***\n", wake_word_sr_get_word_name());
 
-    int last_touch = 1;
-    int touch_held_ms = 0;
     while(1) {
-        int touch = gpio_get_level(PIN_TOUCH);
-        if (touch == 0) { // Pressed / held down
-            touch_held_ms += 100;
-            if (touch_held_ms == RBOT_BUTTON_LONG_PRESS_MS) { // 1.5s threshold reached
-                ESP_LOGI("MAIN", "🛑 Touch/Button on GPIO %d LONG PRESSED (>=1.5s)! Requesting session abort...", PIN_TOUCH);
-                rbot_signal_session_end();
-            }
-        } else { // Released
-            if (last_touch == 0 && touch_held_ms < RBOT_BUTTON_LONG_PRESS_MS) { // Short press release
-                ESP_LOGI("MAIN", "🔘 Touch/Button on GPIO %d SHORT PRESSED (%d ms)", PIN_TOUCH, touch_held_ms);
-                if (s_interaction_busy) {
-                    // In active session (e.g. follow-up wait): signal immediate speech onset!
-                    voice_chat_signal_button_pressed();
-                } else {
-                    // In idle: start new multi-turn session!
-                    rbot_request_turn(TRIGGER_BUTTON, 10);
-                }
-            }
-            touch_held_ms = 0;
-        }
-        last_touch = touch;
+        vTaskDelay(pdMS_TO_TICKS(100));
 
         if (g_net) {
             board_network_tick(g_net);

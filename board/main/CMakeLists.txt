@@ -8,6 +8,7 @@ idf_component_register(
         "cloud_client.c"
         "command_dispatcher.c"
         "tts_client.c"
+        "rbot_ble.c"
         "wake_word_runtime.cc"
         "../src/board_audio.c"
         "../src/board_display.c"
@@ -34,6 +35,8 @@ idf_component_register(
         esp-tls
         log
         wakeword
+        bt
+        esp_app_format
     EMBED_TXTFILES
         "certs/rbots_root_ca.pem"
 )
