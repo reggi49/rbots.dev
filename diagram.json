@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "author": "R-Bot Hardware Engineer",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "board-esp32-s3-devkitc-1",
+      "id": "esp",
+      "top": 120,
+      "left": 180,
+      "attrs": { "flashSize": "16", "psramSize": "8" }
+    },
+    {
+      "type": "board-st7735",
+      "id": "lcd",
+      "top": -120,
+      "left": 180,
+      "attrs": {}
+    },
+    {
+      "type": "board-i2s-mic",
+      "id": "mic",
+      "top": 200,
+      "left": -60,
+      "attrs": {}
+    },
+    {
+      "type": "board-max98357a",
+      "id": "amp",
+      "top": 360,
+      "left": 500,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-speaker",
+      "id": "spk",
+      "top": 360,
+      "left": 720,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led_m_left_fwd",
+      "top": 540,
+      "left": 480,
+      "attrs": { "color": "green", "label": "Motor L Fwd (IN1)" }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led_m_left_rev",
+      "top": 540,
+      "left": 560,
+      "attrs": { "color": "red", "label": "Motor L Rev (IN2)" }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led_m_right_fwd",
+      "top": 620,
+      "left": 480,
+      "attrs": { "color": "green", "label": "Motor R Fwd (IN3)" }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led_m_right_rev",
+      "top": 620,
+      "left": 560,
+      "attrs": { "color": "red", "label": "Motor R Rev (IN4)" }
+    }
+  ],
+  "connections": [
+    [ "esp:GND.1", "lcd:GND", "black", [ "v-20", "h0" ] ],
+    [ "esp:3V3.1", "lcd:VCC", "red", [ "v-30", "h-100" ] ],
+    [ "esp:3V3.1", "lcd:LED", "red", [ "v-30", "h-20" ] ],
+    [ "esp:1", "lcd:CS", "green", [ "v-40", "h-40" ] ],
+    [ "esp:2", "lcd:RESET", "orange", [ "v-50", "h-30" ] ],
+    [ "esp:42", "lcd:A0", "yellow", [ "v-60", "h-20" ] ],
+    [ "esp:4", "lcd:SDA", "blue", [ "v-70", "h-10" ] ],
+    [ "esp:5", "lcd:SCK", "purple", [ "v-80", "h0" ] ],
+
+    [ "esp:GND.1", "mic:GND", "black", [ "h-40", "v40" ] ],
+    [ "esp:GND.1", "mic:L/R", "black", [ "h-40", "v50" ] ],
+    [ "esp:3V3.1", "mic:VDD", "red", [ "h-50", "v60" ] ],
+    [ "esp:41", "mic:SD", "cyan", [ "h-30", "v0" ] ],
+    [ "esp:15", "mic:WS", "yellow", [ "h-20", "v10" ] ],
+    [ "esp:16", "mic:SCK", "purple", [ "h-20", "v20" ] ],
+
+    [ "esp:5V", "amp:VIN", "red", [ "v30", "h120" ] ],
+    [ "esp:GND.2", "amp:GND", "black", [ "v40", "h130" ] ],
+    [ "esp:8", "amp:LRC", "yellow", [ "h40", "v20" ] ],
+    [ "esp:9", "amp:BCLK", "purple", [ "h40", "v40" ] ],
+    [ "esp:10", "amp:DIN", "blue", [ "h40", "v60" ] ],
+
+    [ "amp:SPK+", "spk:+", "red", [ "h20", "v0" ] ],
+    [ "amp:SPK-", "spk:-", "black", [ "h20", "v0" ] ],
+
+    [ "esp:11", "led_m_left_fwd:A", "cyan", [ "h60", "v20" ] ],
+    [ "esp:GND.2", "led_m_left_fwd:C", "black", [ "v50", "h150" ] ],
+    [ "esp:12", "led_m_left_rev:A", "blue", [ "h70", "v30" ] ],
+    [ "esp:GND.2", "led_m_left_rev:C", "black", [ "v50", "h160" ] ],
+    [ "esp:14", "led_m_right_fwd:A", "green", [ "h80", "v40" ] ],
+    [ "esp:GND.2", "led_m_right_fwd:C", "black", [ "v50", "h170" ] ],
+    [ "esp:13", "led_m_right_rev:A", "purple", [ "h90", "v50" ] ],
+    [ "esp:GND.2", "led_m_right_rev:C", "black", [ "v50", "h180" ] ]
+  ],
+  "dependencies": {}
+}

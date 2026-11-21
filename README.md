@@ -9,7 +9,7 @@
 2. [Fitur Utama](#fitur-utama)
 3. [Spesifikasi Hardware & Komponen](#spesifikasi-hardware--komponen)
 4. [Skema Pinout & Pengkabelan Lengkap](#skema-pinout--pengkabelan-lengkap)
-   - [1. Audio Input: Mikrofon INMP441 (I2S0)](#1-audio-input-mikrofon-inmp441-i2s0)
+   - [1. Audio Input: Mikrofon INMP441 (I2S0)](#1-audio-input-mikrofon-inmp441-i2s0)12
    - [2. Audio Output: Amplifier MAX98357A (I2S1)](#2-audio-output-amplifier-max98357a-i2s1)
    - [3. Visual Display: ST7735 1.8" TFT (SPI)](#3-visual-display-st7735-18-tft-spi)
    - [4. Penggerak Motor: DRV8833 + Dual N20 Gearmotors](#4-penggerak-motor-drv8833--dual-n20-gearmotors)
@@ -93,110 +93,113 @@ Sistem tidak lagi menggunakan tombol sentuh (*touch sensor*) fisik, melainkan mu
 | Komponen | Tipe / Model | Peran & Keterangan |
 | :--- | :--- | :--- |
 | **Microcontroller** | ESP32-S3 DevKit N16R8 | Dual Core Xtensa LX7, 16 MB Flash, 8 MB Octal PSRAM |
-| **Driver Motor** | DRV8833 Dual H-Bridge (Modul Hitam) | Efisiensi tinggi, kontrol arah & kecepatan PWM 2 motor |
+| **Driver Motor** | DRV8833 Dual H-Bridge (Modul Hitam) | Diputar 180°, kontrol arah & kecepatan PWM 2 motor |
 | **Motor Penggerak** | 2x N20 Micro Metal Gearmotor | Motor DC torsi presisi untuk roda robot (Kiri & Kanan) |
-| **Baterai** | 18650 Li-ion 3.7V (~2500–3400 mAh) | Sumber daya utama yang dapat diisi ulang |
-| **BMS / Charger** | Modul 1S BMS / TP4056 dengan Proteksi | Pengisian via USB-C, proteksi overcharge & under-voltage |
+| **Baterai** | 18650 Li-ion 3.7V 1S (~2500–3400 mAh) | Sumber daya utama yang dapat diisi ulang |
+| **BMS / Power Boost** | MH-CD42 (berbasis IP5306) | Pengisian via USB-C, step-up 5V 2A stabil, auto-sleep & auto-load |
 | **Mikrofon** | INMP441 MEMS Digital I2S | Input suara 16-bit 16 kHz (Port I2S0 RX) |
-| **Audio Amp** | MAX98357A I2S Class D Amplifier | Output audio digital ke analog (Port I2S1 TX) |
-| **Speaker** | 4Ω 3W Full-Range Speaker | Pengeras suara vokal robot |
+| **Audio Amp** | MAX98357A I2S Class D Amplifier | Output audio digital ke analog (Port I2S1 TX, Opsi B) |
+| **Speaker** | 4Ω 3W Full-Range Speaker | Pengeras suara vokal robot (BTL output, terisolasi dari GND) |
 | **Layar** | ST7735 1.8" SPI TFT LCD | Resolusi 128x160 piksel, rendering wajah robot kucing |
-| *Touch Sensor* | *(Ditiadakan)* | *Pin GPIO 14 dialokasikan ulang untuk kontrol motor* |
+| *Touch Sensor* | *(Ditiadakan / Spare GPIO 47)* | *Pin kontrol dialokasikan penuh untuk motor dan audio* |
 
 ---
 
-## Skema Pinout & Pengkabelan Lengkap
+## Skema Pinout & Pengkabelan Lengkap (Arsitektur Perfboard 10×22)
 
-File konfigurasi pin utama didefinisikan di [`board/include/board_pins.h`](board/include/board_pins.h).
+File konfigurasi pin utama didefinisikan di [`board/include/board_pins.h`](board/include/board_pins.h). Diagram visual wiring lengkap tersedia di [`rbot_perfboard_wiring.png`](rbot_perfboard_wiring.png).
 
 > [!IMPORTANT]
-> - Seluruh pin ground (**GND**) pada ESP32-S3, modul DRV8833, amplifier MAX98357A, dan output BMS **wajib terhubung bersama (Common Ground)**.
-> - Hindari mengambil tegangan motor dari pin `3V3` ESP32-S3. Gunakan output baterai langsung/BMS ke pin `VCC` DRV8833 untuk mencegah penurunan tegangan (*brownout reset*).
+> - Seluruh pin ground (**GND**) pada ESP32-S3, modul DRV8833, amplifier MAX98357A, layar ST7735, mikrofon INMP441, dan output MH-CD42 **wajib terhubung bersama (Common Ground)**.
+> - Hindari mengambil tegangan motor dari pin `3V3` ESP32-S3. Gunakan rel `5V` (dari output saklar MH-CD42) ke pin `VCC` DRV8833 untuk mencegah penurunan tegangan (*brownout reset*).
+> - **Jangan menyambungkan port USB-C ESP32 ke input charge MH-CD42** (gunakan port USB-C MH-CD42 khusus charge, dan USB-C ESP32 khusus flash/serial monitor).
 
 ---
 
-### 1. Audio Input: Mikrofon INMP441 (I2S0)
-| Pin INMP441 | Pin ESP32-S3 | Keterangan |
-| :--- | :--- | :--- |
-| **VDD** | 3.3V | Catu daya mikrofon |
-| **GND** | GND | Ground bersama |
-| **SD** | **GPIO 2** | Serial Data Input |
-| **SCK / BCLK** | **GPIO 4** | Continuous Serial Clock |
-| **WS / LRCLK** | **GPIO 1** | Word Select (Left/Right clock) |
-| **L/R** | GND | Konfigurasi Left Channel |
+### 1. Audio Input: Mikrofon INMP441 (I2S0 RX)
+| Pin INMP441 | Pin ESP32-S3 | Fisik Header | Keterangan |
+| :--- | :--- | :--- | :--- |
+| **VDD** | 3.3V | Header Kanan Pin 2 | Catu daya mikrofon (Maksimal 3.3V!) |
+| **GND** | GND | Header Kiri Pin 1 (Atas) | Ground mikrofon |
+| **L/R** | GND (disatukan ke pin GND Mic) | Header Kiri Pin 1 (Atas) | Wajib ke GND untuk kanal kiri (Left Channel) |
+| **SD** | **GPIO 41** | Header Kiri Pin 7 | Serial Data Output mic ke ESP32 |
+| **WS / LRCLK** | **GPIO 15** | Header Kanan Pin 8 | Word Select (Left/Right Clock) |
+| **SCK / BCLK** | **GPIO 16** | Header Kanan Pin 9 | Continuous Bit Clock |
 
 ---
 
-### 2. Audio Output: Amplifier MAX98357A (I2S1)
-| Pin MAX98357A | Pin ESP32-S3 | Keterangan |
-| :--- | :--- | :--- |
-| **VIN** | 5V / V_BAT | Catu daya amplifier (disarankan 5V atau tegangan baterai) |
-| **GND** | GND | Ground bersama |
-| **DIN** | **GPIO 6** | Digital Audio Data Output |
-| **BCLK** | **GPIO 11** | Bit Clock Output |
-| **LRC / WS** | **GPIO 12** | Left/Right Word Clock Output |
-| **GAIN** | GND | Gain default (+9dB) |
-| **SD_MODE** | Floating | Mode stereo-to-mono mix |
+### 2. Audio Output: Amplifier MAX98357A (I2S1 TX — Opsi B)
+*Catatan: Modul dipasang terbalik secara horizontal (`LRC` di kiri, `VIN` & `GND` di kanan).*
+
+| Pin MAX98357A | Pin ESP32-S3 / Rel | Fisik Header | Keterangan |
+| :--- | :--- | :--- | :--- |
+| **VIN** (Paling Kanan) | **5.0V** (Rel Saklar MH-CD42) | Header Kanan Pin 21 (`5Vin`) | Daya utama amplifier (+5V optimal) |
+| **GND** | **GND** | Header Kanan Pin 22 | Common Ground audio |
+| **SD** | *(Kosong / Floating)* | - | Dibiarkan terbuka (Internal pull-up aktif) |
+| **GAIN** | *(Kosong / Floating)* | - | Dibiarkan terbuka (Default +9dB stereo-mix) |
+| **DIN** | **GPIO 10** | Header Kanan Pin 16 | Digital Audio Data Output |
+| **BCLK** | **GPIO 9** | Header Kanan Pin 15 | Bit Clock Output |
+| **LRC / WS** (Paling Kiri)| **GPIO 8** | Header Kanan Pin 12 | Left/Right Word Clock Output |
+| **SPK+ & SPK-** | Terminal Speaker 4Ω 3W | Terminal Langsung | ⚠️ **BTL Output: Dilarang menyambung SPK- ke GND!** |
 
 ---
 
 ### 3. Visual Display: ST7735 1.8" TFT (SPI)
-| Pin Layar ST7735 | Pin ESP32-S3 | Keterangan |
-| :--- | :--- | :--- |
-| **VCC** | 3.3V / 5V | Catu daya modul display |
-| **GND** | GND | Ground bersama |
-| **CS** | **GPIO 7** | SPI Chip Select |
-| **SCK / SCL** | **GPIO 8** | SPI Master Clock |
-| **SDA / MOSI** | **GPIO 9** | SPI Master Out Slave In |
-| **A0 / DC** | **GPIO 10** | Data / Command Control |
-| **RESET / RST** | **GPIO 16** | Hardware Reset Pin |
-| **LED / BL** | **GPIO 15** (atau 3.3V) | Kontrol kecerahan backlight |
+| Pin Layar ST7735 | Pin ESP32-S3 | Fisik Header | Keterangan |
+| :--- | :--- | :--- | :--- |
+| **VCC** (Pin 1 Kiri) | 3.3V | Header Kanan Pin 2 | Catu daya modul display |
+| **GND** (Pin 2) | GND | Header Kiri Pin 1 (Atas) | Ground sinyal atas |
+| **CS** (Pin 3) | **GPIO 1** | Header Kiri Pin 4 | SPI Chip Select |
+| **RESET / RST** (Pin 4) | **GPIO 2** | Header Kiri Pin 5 | Hardware Reset |
+| **A0 / DC** (Pin 5) | **GPIO 42** | Header Kiri Pin 6 | Data / Command Control |
+| **SDA / MOSI** (Pin 6) | **GPIO 4** | Header Kanan Pin 4 | SPI Data (Tersolder di GPIO 4) |
+| **SCK / SCL** (Pin 7) | **GPIO 5** | Header Kanan Pin 5 | SPI Clock (Tersolder di GPIO 5) |
+| **LED / BL** (Pin 8 Kanan) | 3.3V | Header Kanan Pin 1 | Jembatan timah langsung ke pin 3V3 sebelah |
 
 ---
 
 ### 4. Penggerak Motor: DRV8833 + Dual N20 Gearmotors
-Modul DRV8833 menghubungkan ESP32-S3 dengan dua buah motor N20 (Roda Kiri & Roda Kanan):
+*Catatan: Modul diputar 180° sehingga pin input `IN1-IN4`, `VCC`, `GND` berada di sisi kanan menghadap header bawah.*
 
-| Pin DRV8833 (Hitam) | Terhubung Ke | Deskripsi Fungsi |
-| :--- | :--- | :--- |
-| **VCC** | **(+) Baterai / BMS OUT+** | Catu daya motor (3.7V - 6V) |
-| **GND** | **(-) Baterai & GND ESP32** | Ground bersama (*Common Ground*) |
-| **IN1** | **ESP32-S3 GPIO 13** | Kontrol Roda Kiri (Maju / PWM) |
-| **IN2** | **ESP32-S3 GPIO 14** | Kontrol Roda Kiri (Mundur / PWM) *(Bekas pin touch)* |
-| **IN3** | **ESP32-S3 GPIO 17** | Kontrol Roda Kanan (Maju / PWM) |
-| **IN4** | **ESP32-S3 GPIO 18** | Kontrol Roda Kanan (Mundur / PWM) |
-| **ULT / EEP** | 3.3V / Dibiarkan | Pin Sleep (*biasanya sudah terpasang pull-up internal*) |
-| **MOTOR A (OUT1, OUT2)**| Kabel Motor N20 Kiri | Terminal Roda Kiri |
-| **MOTOR B (OUT3, OUT4)**| Kabel Motor N20 Kanan | Terminal Roda Kanan |
+| Pin DRV8833 (Hitam) | Terhubung Ke | Fisik Header | Deskripsi Fungsi |
+| :--- | :--- | :--- | :--- |
+| **VCC** | **5.0V** (Rel Saklar MH-CD42) | Header Kanan Pin 21 (`5Vin`) | Catu daya motor (+5V dari boost MH-CD42) |
+| **GND** | **GND** | Header Kanan Pin 22 | Common Ground arus motor |
+| **J1 (Jumper Solder)** | Disolder Gabung | Pada Modul DRV8833 | Otomatis mengaktifkan nSLEEP/EEP |
+| **IN1** | **GPIO 11** | Header Kanan Pin 17 | Kontrol Roda Kiri Maju (PWM) |
+| **IN2** | **GPIO 12** | Header Kanan Pin 18 | Kontrol Roda Kiri Mundur (PWM) |
+| **IN3** | **GPIO 14** | Header Kanan Pin 20 | Kontrol Roda Kanan Maju (PWM) |
+| **IN4** | **GPIO 13** | Header Kanan Pin 19 | Kontrol Roda Kanan Mundur (PWM) |
+| **OUT1 & OUT2** | Kabel Motor N20 Kiri | Sisi Kiri Modul | Terminal Roda Kiri |
+| **OUT3 & OUT4** | Kabel Motor N20 Kanan| Sisi Kiri Modul | Terminal Roda Kanan |
 
 ---
 
-### 5. Sistem Daya: Baterai 18650 + Modul BMS
+### 5. Sistem Daya: Baterai 1S + MH-CD42 (IP5306) + Switch ON/OFF
 ```
  ┌──────────────────────┐
  │  Baterai 18650 3.7V  │
  │  [ + ]        [ - ]  │
  └───┬─────────────┬────┘
      │             │
-     │             │
  ┌───▼─────────────▼──────────────────────────────┐
- │ MODUL BMS / CHARGER (Misal: TP4056 Proteksi)   │
- │ • B+  <-- Kutub Positif Baterai                │
- │ • B-  <-- Kutub Negatif Baterai                │
- │ • IN+ / IN- <-- Port Pengisian USB-C           │
+ │ MODUL POWER / CHARGER MH-CD42 (IP5306)         │
+ │ • BAT+  <-- Kutub Positif Baterai 3.7V          │
+ │ • BAT-  <-- Kutub Negatif Baterai 3.7V          │
+ │ • USB-C <-- Port Pengisian Daya (5V Adapter)   │
  └───┬─────────────────────────────┬──────────────┘
-     │ OUT+ (VCC)                  │ OUT- (GND)
+     │ 5V / VOUT+                  │ GND / VOUT-
      ▼                             ▼
- [Sakelar On/Off]            ┌───────────────┐
+ [Saklar On/Off]             ┌───────────────┐
      │                       │ COMMON GROUND │
      ├───────────────────────┤ (GND Bersama) │
      │                       └───────┬───────┘
      │                               │
      ├─> VCC DRV8833 Motor           ├─> GND DRV8833 Motor
-     │                               ├─> GND ESP32-S3
-     └─> 5V / VIN ESP32-S3           ├─> GND Layar ST7735
-         (atau via Step-Up 5V)       ├─> GND Mic INMP441
-                                     └─> GND Amp MAX98357A
+     ├─> VIN MAX98357A Audio         ├─> GND MAX98357A Audio
+     └─> 5Vin ESP32-S3               ├─> GND ESP32-S3
+                                     ├─> GND Layar ST7735
+                                     └─> GND Mic INMP441
 ```
 
 ---
@@ -205,7 +208,7 @@ Modul DRV8833 menghubungkan ESP32-S3 dengan dua buah motor N20 (Roda Kiri & Roda
 
 Kombinasi logika digital/PWM pada pin `IN1-IN4` untuk mengatur manuver pergerakan robot:
 
-| Aksi Manuver Robot | IN1 (GPIO 13) | IN2 (GPIO 14) | IN3 (GPIO 17) | IN4 (GPIO 18) | Keterangan Gerak |
+| Aksi Manuver Robot | IN1 (GPIO 11) | IN2 (GPIO 12) | IN3 (GPIO 14) | IN4 (GPIO 13) | Keterangan Gerak |
 | :--- | :---: | :---: | :---: | :---: | :--- |
 | **Maju Lurus** | **HIGH (PWM)**| LOW | **HIGH (PWM)**| LOW | Kedua roda berputar maju bersamaan |
 | **Mundur Lurus** | LOW | **HIGH (PWM)**| LOW | **HIGH (PWM)**| Kedua roda berputar mundur bersamaan |

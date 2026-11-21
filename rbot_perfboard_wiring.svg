@@ -1,0 +1,1090 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1520 2400" width="1520" height="2400">
+<defs>
+  <style>
+    .title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-weight: 800; font-size: 27px; fill: #ffffff; }
+    .subtitle { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-weight: 500; font-size: 13.5px; fill: #94a3b8; }
+    .header-tag { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-weight: 800; font-size: 13px; letter-spacing: 0.5px; }
+    .pin-title { font-family: "SF Mono", Monaco, Consolas, monospace; font-size: 12px; font-weight: 700; }
+    .pin-sub { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 10px; font-weight: 600; }
+    .mod-label { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 13px; font-weight: 800; }
+    .comp-pin { font-family: "SF Mono", Monaco, Consolas, monospace; font-size: 11px; font-weight: 700; }
+    .legend-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 14px; font-weight: 700; fill: #f8fafc; }
+    .legend-text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 11.5px; fill: #cbd5e1; }
+  </style>
+  <filter id="shadow" x="-5%" y="-5%" width="110%" height="115%">
+    <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.45"/>
+  </filter>
+</defs>
+
+<rect width="1520" height="2400" fill="#0a0f1d"/>
+
+<rect x="50" y="25" width="1420" height="90" rx="14" fill="#1e293b" stroke="#334155" stroke-width="2" filter="url(#shadow)"/>
+<text x="80" y="62" class="title">🤖 R-BOT PERFBOARD WIRING &amp; PIN ARCHITECTURE (10×22 GRID)</text>
+<text x="80" y="90" class="subtitle">Skema Solder Perfboard Lengkap • MAX98357A Vin, GND, SD, GAIN Detail • SDA ke GPIO 4 &amp; SCK ke GPIO 5 • ESP32-S3 N16R8</text>
+
+<rect x="400" y="150" width="713" height="1453" rx="18" fill="#064e3b" stroke="#047857" stroke-width="4" filter="url(#shadow)"/>
+<text x="455" y="172" font-family="monospace" font-size="12" font-weight="700" fill="#a7f3d0" text-anchor="middle">C1 [L]</text>
+<text x="522" y="172" font-family="monospace" font-size="12" font-weight="700" fill="#a7f3d0" text-anchor="middle">C2</text>
+<text x="589" y="172" font-family="monospace" font-size="12" font-weight="700" fill="#a7f3d0" text-anchor="middle">C3</text>
+<text x="656" y="172" font-family="monospace" font-size="12" font-weight="700" fill="#a7f3d0" text-anchor="middle">C4</text>
+<text x="723" y="172" font-family="monospace" font-size="12" font-weight="700" fill="#a7f3d0" text-anchor="middle">C5</text>
+<text x="790" y="172" font-family="monospace" font-size="12" font-weight="700" fill="#a7f3d0" text-anchor="middle">C6</text>
+<text x="857" y="172" font-family="monospace" font-size="12" font-weight="700" fill="#a7f3d0" text-anchor="middle">C7</text>
+<text x="924" y="172" font-family="monospace" font-size="12" font-weight="700" fill="#a7f3d0" text-anchor="middle">C8</text>
+<text x="991" y="172" font-family="monospace" font-size="12" font-weight="700" fill="#a7f3d0" text-anchor="middle">C9</text>
+<text x="1058" y="172" font-family="monospace" font-size="12" font-weight="700" fill="#a7f3d0" text-anchor="middle">C10 [R]</text>
+<text x="380" y="235" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R1</text>
+<text x="1133" y="235" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R1</text>
+<text x="380" y="298" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R2</text>
+<text x="1133" y="298" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R2</text>
+<text x="380" y="361" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R3</text>
+<text x="1133" y="361" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R3</text>
+<text x="380" y="424" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R4</text>
+<text x="1133" y="424" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R4</text>
+<text x="380" y="487" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R5</text>
+<text x="1133" y="487" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R5</text>
+<text x="380" y="550" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R6</text>
+<text x="1133" y="550" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R6</text>
+<text x="380" y="613" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R7</text>
+<text x="1133" y="613" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R7</text>
+<text x="380" y="676" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R8</text>
+<text x="1133" y="676" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R8</text>
+<text x="380" y="739" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R9</text>
+<text x="1133" y="739" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R9</text>
+<text x="380" y="802" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R10</text>
+<text x="1133" y="802" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R10</text>
+<text x="380" y="865" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R11</text>
+<text x="1133" y="865" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R11</text>
+<text x="380" y="928" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R12</text>
+<text x="1133" y="928" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R12</text>
+<text x="380" y="991" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R13</text>
+<text x="1133" y="991" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R13</text>
+<text x="380" y="1054" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R14</text>
+<text x="1133" y="1054" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R14</text>
+<text x="380" y="1117" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R15</text>
+<text x="1133" y="1117" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R15</text>
+<text x="380" y="1180" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R16</text>
+<text x="1133" y="1180" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R16</text>
+<text x="380" y="1243" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R17</text>
+<text x="1133" y="1243" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R17</text>
+<text x="380" y="1306" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R18</text>
+<text x="1133" y="1306" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R18</text>
+<text x="380" y="1369" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R19</text>
+<text x="1133" y="1369" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R19</text>
+<text x="380" y="1432" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R20</text>
+<text x="1133" y="1432" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R20</text>
+<text x="380" y="1495" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R21</text>
+<text x="1133" y="1495" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R21</text>
+<text x="380" y="1558" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R22</text>
+<text x="1133" y="1558" font-family="monospace" font-size="12" font-weight="700" fill="#6ee7b7" text-anchor="middle">R22</text>
+<circle cx="455" cy="230" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="455" cy="230" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="522" cy="230" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="522" cy="230" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="589" cy="230" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="589" cy="230" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="656" cy="230" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="656" cy="230" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="723" cy="230" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="723" cy="230" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="790" cy="230" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="790" cy="230" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="857" cy="230" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="857" cy="230" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="924" cy="230" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="924" cy="230" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="991" cy="230" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="991" cy="230" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="1058" cy="230" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="1058" cy="230" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="455" cy="293" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="455" cy="293" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="522" cy="293" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="522" cy="293" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="589" cy="293" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="589" cy="293" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="656" cy="293" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="656" cy="293" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="723" cy="293" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="723" cy="293" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="790" cy="293" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="790" cy="293" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="857" cy="293" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="857" cy="293" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="924" cy="293" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="924" cy="293" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="991" cy="293" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="991" cy="293" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="1058" cy="293" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="1058" cy="293" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="455" cy="356" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="455" cy="356" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="522" cy="356" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="522" cy="356" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="589" cy="356" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="589" cy="356" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="656" cy="356" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="656" cy="356" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="723" cy="356" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="723" cy="356" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="790" cy="356" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="790" cy="356" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="857" cy="356" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="857" cy="356" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="924" cy="356" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="924" cy="356" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="991" cy="356" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="991" cy="356" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="1058" cy="356" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="1058" cy="356" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="455" cy="419" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="455" cy="419" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="522" cy="419" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="522" cy="419" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="589" cy="419" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="589" cy="419" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="656" cy="419" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="656" cy="419" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="723" cy="419" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="723" cy="419" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="790" cy="419" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="790" cy="419" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="857" cy="419" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="857" cy="419" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="924" cy="419" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="924" cy="419" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="991" cy="419" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="991" cy="419" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="1058" cy="419" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="1058" cy="419" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="455" cy="482" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="455" cy="482" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="522" cy="482" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="522" cy="482" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="589" cy="482" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="589" cy="482" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="656" cy="482" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="656" cy="482" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="723" cy="482" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="723" cy="482" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="790" cy="482" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="790" cy="482" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="857" cy="482" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="857" cy="482" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="924" cy="482" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="924" cy="482" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="991" cy="482" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="991" cy="482" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="1058" cy="482" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="1058" cy="482" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="455" cy="545" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="455" cy="545" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="522" cy="545" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="522" cy="545" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="589" cy="545" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="589" cy="545" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="656" cy="545" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="656" cy="545" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="723" cy="545" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="723" cy="545" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="790" cy="545" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="790" cy="545" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="857" cy="545" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="857" cy="545" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="924" cy="545" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="924" cy="545" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="991" cy="545" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="991" cy="545" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="1058" cy="545" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="1058" cy="545" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="455" cy="608" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="455" cy="608" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="522" cy="608" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="522" cy="608" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="589" cy="608" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="589" cy="608" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="656" cy="608" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="656" cy="608" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="723" cy="608" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="723" cy="608" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="790" cy="608" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="790" cy="608" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="857" cy="608" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="857" cy="608" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="924" cy="608" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="924" cy="608" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="991" cy="608" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="991" cy="608" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="1058" cy="608" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="1058" cy="608" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="455" cy="671" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="455" cy="671" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="522" cy="671" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="522" cy="671" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="589" cy="671" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="589" cy="671" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="656" cy="671" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="656" cy="671" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="723" cy="671" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="723" cy="671" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="790" cy="671" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="790" cy="671" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="857" cy="671" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="857" cy="671" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="924" cy="671" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="924" cy="671" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="991" cy="671" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="991" cy="671" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="1058" cy="671" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="1058" cy="671" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="455" cy="734" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="455" cy="734" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="522" cy="734" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="522" cy="734" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="589" cy="734" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="589" cy="734" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="656" cy="734" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="656" cy="734" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="723" cy="734" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="723" cy="734" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="790" cy="734" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="790" cy="734" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="857" cy="734" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="857" cy="734" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="924" cy="734" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="924" cy="734" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="991" cy="734" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="991" cy="734" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="1058" cy="734" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="1058" cy="734" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="455" cy="797" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="455" cy="797" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="522" cy="797" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="522" cy="797" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="589" cy="797" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="589" cy="797" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="656" cy="797" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="656" cy="797" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="723" cy="797" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="723" cy="797" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="790" cy="797" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="790" cy="797" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="857" cy="797" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="857" cy="797" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="924" cy="797" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="924" cy="797" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="991" cy="797" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="991" cy="797" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="1058" cy="797" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="1058" cy="797" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="455" cy="860" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="455" cy="860" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="522" cy="860" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="522" cy="860" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="589" cy="860" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="589" cy="860" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="656" cy="860" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="656" cy="860" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="723" cy="860" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="723" cy="860" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="790" cy="860" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="790" cy="860" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="857" cy="860" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="857" cy="860" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="924" cy="860" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="924" cy="860" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="991" cy="860" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="991" cy="860" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="1058" cy="860" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="1058" cy="860" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="455" cy="923" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="455" cy="923" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="522" cy="923" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="522" cy="923" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="589" cy="923" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="589" cy="923" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="656" cy="923" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="656" cy="923" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="723" cy="923" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="723" cy="923" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="790" cy="923" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="790" cy="923" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="857" cy="923" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="857" cy="923" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="924" cy="923" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="924" cy="923" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="991" cy="923" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="991" cy="923" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="1058" cy="923" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="1058" cy="923" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="455" cy="986" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="455" cy="986" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="522" cy="986" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="522" cy="986" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="589" cy="986" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="589" cy="986" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="656" cy="986" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="656" cy="986" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="723" cy="986" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="723" cy="986" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="790" cy="986" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="790" cy="986" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="857" cy="986" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="857" cy="986" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="924" cy="986" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="924" cy="986" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="991" cy="986" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="991" cy="986" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="1058" cy="986" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="1058" cy="986" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="455" cy="1049" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="455" cy="1049" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="522" cy="1049" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="522" cy="1049" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="589" cy="1049" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="589" cy="1049" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="656" cy="1049" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="656" cy="1049" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="723" cy="1049" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="723" cy="1049" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="790" cy="1049" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="790" cy="1049" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="857" cy="1049" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="857" cy="1049" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="924" cy="1049" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="924" cy="1049" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="991" cy="1049" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="991" cy="1049" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="1058" cy="1049" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="1058" cy="1049" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="455" cy="1112" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="455" cy="1112" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="522" cy="1112" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="522" cy="1112" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="589" cy="1112" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="589" cy="1112" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="656" cy="1112" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="656" cy="1112" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="723" cy="1112" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="723" cy="1112" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="790" cy="1112" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="790" cy="1112" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="857" cy="1112" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="857" cy="1112" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="924" cy="1112" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="924" cy="1112" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="991" cy="1112" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="991" cy="1112" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="1058" cy="1112" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="1058" cy="1112" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="455" cy="1175" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="455" cy="1175" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="522" cy="1175" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="522" cy="1175" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="589" cy="1175" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="589" cy="1175" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="656" cy="1175" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="656" cy="1175" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="723" cy="1175" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="723" cy="1175" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="790" cy="1175" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="790" cy="1175" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="857" cy="1175" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="857" cy="1175" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="924" cy="1175" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="924" cy="1175" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="991" cy="1175" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="991" cy="1175" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="1058" cy="1175" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="1058" cy="1175" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="455" cy="1238" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="455" cy="1238" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="522" cy="1238" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="522" cy="1238" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="589" cy="1238" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="589" cy="1238" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="656" cy="1238" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="656" cy="1238" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="723" cy="1238" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="723" cy="1238" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="790" cy="1238" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="790" cy="1238" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="857" cy="1238" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="857" cy="1238" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="924" cy="1238" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="924" cy="1238" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="991" cy="1238" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="991" cy="1238" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="1058" cy="1238" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="1058" cy="1238" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="455" cy="1301" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="455" cy="1301" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="522" cy="1301" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="522" cy="1301" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="589" cy="1301" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="589" cy="1301" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="656" cy="1301" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="656" cy="1301" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="723" cy="1301" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="723" cy="1301" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="790" cy="1301" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="790" cy="1301" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="857" cy="1301" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="857" cy="1301" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="924" cy="1301" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="924" cy="1301" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="991" cy="1301" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="991" cy="1301" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="1058" cy="1301" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="1058" cy="1301" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="455" cy="1364" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="455" cy="1364" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="522" cy="1364" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="522" cy="1364" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="589" cy="1364" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="589" cy="1364" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="656" cy="1364" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="656" cy="1364" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="723" cy="1364" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="723" cy="1364" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="790" cy="1364" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="790" cy="1364" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="857" cy="1364" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="857" cy="1364" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="924" cy="1364" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="924" cy="1364" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="991" cy="1364" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="991" cy="1364" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="1058" cy="1364" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="1058" cy="1364" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="455" cy="1427" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="455" cy="1427" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="522" cy="1427" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="522" cy="1427" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="589" cy="1427" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="589" cy="1427" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="656" cy="1427" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="656" cy="1427" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="723" cy="1427" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="723" cy="1427" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="790" cy="1427" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="790" cy="1427" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="857" cy="1427" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="857" cy="1427" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="924" cy="1427" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="924" cy="1427" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="991" cy="1427" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="991" cy="1427" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="1058" cy="1427" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="1058" cy="1427" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="455" cy="1490" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="455" cy="1490" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="522" cy="1490" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="522" cy="1490" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="589" cy="1490" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="589" cy="1490" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="656" cy="1490" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="656" cy="1490" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="723" cy="1490" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="723" cy="1490" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="790" cy="1490" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="790" cy="1490" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="857" cy="1490" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="857" cy="1490" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="924" cy="1490" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="924" cy="1490" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="991" cy="1490" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="991" cy="1490" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="1058" cy="1490" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="1058" cy="1490" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="455" cy="1553" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="455" cy="1553" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="522" cy="1553" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="522" cy="1553" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="589" cy="1553" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="589" cy="1553" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="656" cy="1553" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="656" cy="1553" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="723" cy="1553" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="723" cy="1553" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="790" cy="1553" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="790" cy="1553" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="857" cy="1553" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="857" cy="1553" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="924" cy="1553" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="924" cy="1553" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="991" cy="1553" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="991" cy="1553" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+<circle cx="1058" cy="1553" r="11" fill="#042f2e" stroke="#10b981" stroke-width="1.8"/>
+<circle cx="1058" cy="1553" r="4.5" fill="#090d16" stroke="#047857" stroke-width="0.8"/>
+
+    <g>
+      <rect x="95" y="207" width="255" height="46" rx="8" fill="#022c22" stroke="#10b981" stroke-width="1.6"/>
+      <text x="111" y="227" class="pin-title" fill="#10b981">GND</text>
+      <text x="111" y="243" class="pin-desc" fill="#94a3b8">Common GND</text>
+      <line x1="350" y1="230" x2="440" y2="230" stroke="#10b981" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="95" y="270" width="255" height="46" rx="8" fill="#1e293b" stroke="#64748b" stroke-width="1.6"/>
+      <text x="111" y="290" class="pin-title" fill="#64748b">TX</text>
+      <text x="111" y="306" class="pin-desc" fill="#94a3b8">GPIO 43 (Log)</text>
+      <line x1="350" y1="293" x2="440" y2="293" stroke="#64748b" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="95" y="333" width="255" height="46" rx="8" fill="#1e293b" stroke="#64748b" stroke-width="1.6"/>
+      <text x="111" y="353" class="pin-title" fill="#64748b">RX</text>
+      <text x="111" y="369" class="pin-desc" fill="#94a3b8">GPIO 44 (Log)</text>
+      <line x1="350" y1="356" x2="440" y2="356" stroke="#64748b" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="95" y="396" width="255" height="46" rx="8" fill="#052e16" stroke="#22c55e" stroke-width="1.6"/>
+      <text x="111" y="416" class="pin-title" fill="#22c55e">GPIO 1</text>
+      <text x="111" y="432" class="pin-desc" fill="#94a3b8">LCD CS (Chip Select)</text>
+      <line x1="350" y1="419" x2="440" y2="419" stroke="#22c55e" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="95" y="459" width="255" height="46" rx="8" fill="#431407" stroke="#f97316" stroke-width="1.6"/>
+      <text x="111" y="479" class="pin-title" fill="#f97316">GPIO 2</text>
+      <text x="111" y="495" class="pin-desc" fill="#94a3b8">LCD RESET</text>
+      <line x1="350" y1="482" x2="440" y2="482" stroke="#f97316" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="95" y="522" width="255" height="46" rx="8" fill="#422006" stroke="#eab308" stroke-width="1.6"/>
+      <text x="111" y="542" class="pin-title" fill="#eab308">GPIO 42</text>
+      <text x="111" y="558" class="pin-desc" fill="#94a3b8">LCD A0/DC (Command)</text>
+      <line x1="350" y1="545" x2="440" y2="545" stroke="#eab308" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="95" y="585" width="255" height="46" rx="8" fill="#083344" stroke="#06b6d4" stroke-width="1.6"/>
+      <text x="111" y="605" class="pin-title" fill="#06b6d4">GPIO 41</text>
+      <text x="111" y="621" class="pin-desc" fill="#94a3b8">MIC SD (I2S0 Data In)</text>
+      <line x1="350" y1="608" x2="440" y2="608" stroke="#06b6d4" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="95" y="648" width="255" height="46" rx="8" fill="#1e293b" stroke="#64748b" stroke-width="1.6"/>
+      <text x="111" y="668" class="pin-title" fill="#64748b">GPIO 40</text>
+      <text x="111" y="684" class="pin-desc" fill="#94a3b8">Cadangan / Kosong</text>
+      <line x1="350" y1="671" x2="440" y2="671" stroke="#64748b" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="95" y="711" width="255" height="46" rx="8" fill="#1e293b" stroke="#64748b" stroke-width="1.6"/>
+      <text x="111" y="731" class="pin-title" fill="#64748b">GPIO 39</text>
+      <text x="111" y="747" class="pin-desc" fill="#94a3b8">Cadangan / Kosong</text>
+      <line x1="350" y1="734" x2="440" y2="734" stroke="#64748b" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="95" y="774" width="255" height="46" rx="8" fill="#1e293b" stroke="#64748b" stroke-width="1.6"/>
+      <text x="111" y="794" class="pin-title" fill="#64748b">GPIO 38</text>
+      <text x="111" y="810" class="pin-desc" fill="#94a3b8">Cadangan / Kosong</text>
+      <line x1="350" y1="797" x2="440" y2="797" stroke="#64748b" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="95" y="837" width="255" height="46" rx="8" fill="#450a0a" stroke="#ef4444" stroke-width="1.6"/>
+      <text x="111" y="857" class="pin-title" fill="#ef4444">GPIO 37</text>
+      <text x="111" y="873" class="pin-desc" fill="#94a3b8">⚠️ PSRAM Octal (JANGAN)</text>
+      <line x1="350" y1="860" x2="440" y2="860" stroke="#ef4444" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="95" y="900" width="255" height="46" rx="8" fill="#450a0a" stroke="#ef4444" stroke-width="1.6"/>
+      <text x="111" y="920" class="pin-title" fill="#ef4444">GPIO 36</text>
+      <text x="111" y="936" class="pin-desc" fill="#94a3b8">⚠️ PSRAM Octal (JANGAN)</text>
+      <line x1="350" y1="923" x2="440" y2="923" stroke="#ef4444" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="95" y="963" width="255" height="46" rx="8" fill="#450a0a" stroke="#ef4444" stroke-width="1.6"/>
+      <text x="111" y="983" class="pin-title" fill="#ef4444">GPIO 35</text>
+      <text x="111" y="999" class="pin-desc" fill="#94a3b8">⚠️ PSRAM Octal (JANGAN)</text>
+      <line x1="350" y1="986" x2="440" y2="986" stroke="#ef4444" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="95" y="1026" width="255" height="46" rx="8" fill="#450a0a" stroke="#ef4444" stroke-width="1.6"/>
+      <text x="111" y="1046" class="pin-title" fill="#ef4444">GPIO 0</text>
+      <text x="111" y="1062" class="pin-desc" fill="#94a3b8">⚠️ Strapping (JANGAN)</text>
+      <line x1="350" y1="1049" x2="440" y2="1049" stroke="#ef4444" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="95" y="1089" width="255" height="46" rx="8" fill="#450a0a" stroke="#ef4444" stroke-width="1.6"/>
+      <text x="111" y="1109" class="pin-title" fill="#ef4444">GPIO 45</text>
+      <text x="111" y="1125" class="pin-desc" fill="#94a3b8">⚠️ Strapping (JANGAN)</text>
+      <line x1="350" y1="1112" x2="440" y2="1112" stroke="#ef4444" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="95" y="1152" width="255" height="46" rx="8" fill="#3b0764" stroke="#a855f7" stroke-width="1.6"/>
+      <text x="111" y="1172" class="pin-title" fill="#a855f7">GPIO 48</text>
+      <text x="111" y="1188" class="pin-desc" fill="#94a3b8">RGB LED Onboard</text>
+      <line x1="350" y1="1175" x2="440" y2="1175" stroke="#a855f7" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="95" y="1215" width="255" height="46" rx="8" fill="#1e293b" stroke="#64748b" stroke-width="1.6"/>
+      <text x="111" y="1235" class="pin-title" fill="#64748b">GPIO 47</text>
+      <text x="111" y="1251" class="pin-desc" fill="#94a3b8">Cadangan / Kosong</text>
+      <line x1="350" y1="1238" x2="440" y2="1238" stroke="#64748b" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="95" y="1278" width="255" height="46" rx="8" fill="#1e293b" stroke="#64748b" stroke-width="1.6"/>
+      <text x="111" y="1298" class="pin-title" fill="#64748b">GPIO 21</text>
+      <text x="111" y="1314" class="pin-desc" fill="#94a3b8">Cadangan / Kosong</text>
+      <line x1="350" y1="1301" x2="440" y2="1301" stroke="#64748b" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="95" y="1341" width="255" height="46" rx="8" fill="#450a0a" stroke="#ef4444" stroke-width="1.6"/>
+      <text x="111" y="1361" class="pin-title" fill="#ef4444">GPIO 20</text>
+      <text x="111" y="1377" class="pin-desc" fill="#94a3b8">⚠️ USB D+ (JANGAN)</text>
+      <line x1="350" y1="1364" x2="440" y2="1364" stroke="#ef4444" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="95" y="1404" width="255" height="46" rx="8" fill="#450a0a" stroke="#ef4444" stroke-width="1.6"/>
+      <text x="111" y="1424" class="pin-title" fill="#ef4444">GPIO 19</text>
+      <text x="111" y="1440" class="pin-desc" fill="#94a3b8">⚠️ USB D- (JANGAN)</text>
+      <line x1="350" y1="1427" x2="440" y2="1427" stroke="#ef4444" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="95" y="1467" width="255" height="46" rx="8" fill="#022c22" stroke="#10b981" stroke-width="1.6"/>
+      <text x="111" y="1487" class="pin-title" fill="#10b981">GND</text>
+      <text x="111" y="1503" class="pin-desc" fill="#94a3b8">Common GND (Bawah)</text>
+      <line x1="350" y1="1490" x2="440" y2="1490" stroke="#10b981" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="95" y="1530" width="255" height="46" rx="8" fill="#022c22" stroke="#10b981" stroke-width="1.6"/>
+      <text x="111" y="1550" class="pin-title" fill="#10b981">GND</text>
+      <text x="111" y="1566" class="pin-desc" fill="#94a3b8">Common GND (Bawah)</text>
+      <line x1="350" y1="1553" x2="440" y2="1553" stroke="#10b981" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="1153" y="207" width="255" height="46" rx="8" fill="#500724" stroke="#ec4899" stroke-width="1.6"/>
+      <text x="1169" y="227" class="pin-title" fill="#ec4899">3V3</text>
+      <text x="1169" y="243" class="pin-desc" fill="#94a3b8">3.3V LDO Output</text>
+      <line x1="1073" y1="230" x2="1153" y2="230" stroke="#ec4899" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="1153" y="270" width="255" height="46" rx="8" fill="#500724" stroke="#ec4899" stroke-width="1.6"/>
+      <text x="1169" y="290" class="pin-title" fill="#ec4899">3V3</text>
+      <text x="1169" y="306" class="pin-desc" fill="#94a3b8">3.3V LDO Output</text>
+      <line x1="1073" y1="293" x2="1153" y2="293" stroke="#ec4899" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="1153" y="333" width="255" height="46" rx="8" fill="#1e293b" stroke="#64748b" stroke-width="1.6"/>
+      <text x="1169" y="353" class="pin-title" fill="#64748b">RST</text>
+      <text x="1169" y="369" class="pin-desc" fill="#94a3b8">EN / Chip Reset</text>
+      <line x1="1073" y1="356" x2="1153" y2="356" stroke="#64748b" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="1153" y="396" width="255" height="46" rx="8" fill="#172554" stroke="#3b82f6" stroke-width="1.6"/>
+      <text x="1169" y="416" class="pin-title" fill="#3b82f6">GPIO 4</text>
+      <text x="1169" y="432" class="pin-desc" fill="#94a3b8">LCD SDA (SPI MOSI) ✓</text>
+      <line x1="1073" y1="419" x2="1153" y2="419" stroke="#3b82f6" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="1153" y="459" width="255" height="46" rx="8" fill="#3b0764" stroke="#a855f7" stroke-width="1.6"/>
+      <text x="1169" y="479" class="pin-title" fill="#a855f7">GPIO 5</text>
+      <text x="1169" y="495" class="pin-desc" fill="#94a3b8">LCD SCK (SPI Clock) ✓</text>
+      <line x1="1073" y1="482" x2="1153" y2="482" stroke="#a855f7" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="1153" y="522" width="255" height="46" rx="8" fill="#1e293b" stroke="#64748b" stroke-width="1.6"/>
+      <text x="1169" y="542" class="pin-title" fill="#64748b">GPIO 6</text>
+      <text x="1169" y="558" class="pin-desc" fill="#94a3b8">Cadangan / Kosong</text>
+      <line x1="1073" y1="545" x2="1153" y2="545" stroke="#64748b" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="1153" y="585" width="255" height="46" rx="8" fill="#1e293b" stroke="#64748b" stroke-width="1.6"/>
+      <text x="1169" y="605" class="pin-title" fill="#64748b">GPIO 7</text>
+      <text x="1169" y="621" class="pin-desc" fill="#94a3b8">Cadangan / Kosong</text>
+      <line x1="1073" y1="608" x2="1153" y2="608" stroke="#64748b" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="1153" y="648" width="255" height="46" rx="8" fill="#422006" stroke="#eab308" stroke-width="1.6"/>
+      <text x="1169" y="668" class="pin-title" fill="#eab308">GPIO 15</text>
+      <text x="1169" y="684" class="pin-desc" fill="#94a3b8">MIC WS (I2S0 LRCLK)</text>
+      <line x1="1073" y1="671" x2="1153" y2="671" stroke="#eab308" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="1153" y="711" width="255" height="46" rx="8" fill="#3b0764" stroke="#a855f7" stroke-width="1.6"/>
+      <text x="1169" y="731" class="pin-title" fill="#a855f7">GPIO 16</text>
+      <text x="1169" y="747" class="pin-desc" fill="#94a3b8">MIC SCK (I2S0 BCLK)</text>
+      <line x1="1073" y1="734" x2="1153" y2="734" stroke="#a855f7" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="1153" y="774" width="255" height="46" rx="8" fill="#1e293b" stroke="#64748b" stroke-width="1.6"/>
+      <text x="1169" y="794" class="pin-title" fill="#64748b">GPIO 17</text>
+      <text x="1169" y="810" class="pin-desc" fill="#94a3b8">Cadangan / Kosong</text>
+      <line x1="1073" y1="797" x2="1153" y2="797" stroke="#64748b" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="1153" y="837" width="255" height="46" rx="8" fill="#1e293b" stroke="#64748b" stroke-width="1.6"/>
+      <text x="1169" y="857" class="pin-title" fill="#64748b">GPIO 18</text>
+      <text x="1169" y="873" class="pin-desc" fill="#94a3b8">Cadangan / Kosong</text>
+      <line x1="1073" y1="860" x2="1153" y2="860" stroke="#64748b" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="1153" y="900" width="255" height="46" rx="8" fill="#422006" stroke="#eab308" stroke-width="1.6"/>
+      <text x="1169" y="920" class="pin-title" fill="#eab308">GPIO 8</text>
+      <text x="1169" y="936" class="pin-desc" fill="#94a3b8">SPK LRC (I2S1 LRCLK)</text>
+      <line x1="1073" y1="923" x2="1153" y2="923" stroke="#eab308" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="1153" y="963" width="255" height="46" rx="8" fill="#450a0a" stroke="#ef4444" stroke-width="1.6"/>
+      <text x="1169" y="983" class="pin-title" fill="#ef4444">GPIO 3</text>
+      <text x="1169" y="999" class="pin-desc" fill="#94a3b8">⚠️ Strapping (JANGAN)</text>
+      <line x1="1073" y1="986" x2="1153" y2="986" stroke="#ef4444" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="1153" y="1026" width="255" height="46" rx="8" fill="#450a0a" stroke="#ef4444" stroke-width="1.6"/>
+      <text x="1169" y="1046" class="pin-title" fill="#ef4444">GPIO 46</text>
+      <text x="1169" y="1062" class="pin-desc" fill="#94a3b8">⚠️ Strapping (JANGAN)</text>
+      <line x1="1073" y1="1049" x2="1153" y2="1049" stroke="#ef4444" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="1153" y="1089" width="255" height="46" rx="8" fill="#3b0764" stroke="#a855f7" stroke-width="1.6"/>
+      <text x="1169" y="1109" class="pin-title" fill="#a855f7">GPIO 9</text>
+      <text x="1169" y="1125" class="pin-desc" fill="#94a3b8">SPK BCLK (I2S1 BCLK)</text>
+      <line x1="1073" y1="1112" x2="1153" y2="1112" stroke="#a855f7" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="1153" y="1152" width="255" height="46" rx="8" fill="#172554" stroke="#3b82f6" stroke-width="1.6"/>
+      <text x="1169" y="1172" class="pin-title" fill="#3b82f6">GPIO 10</text>
+      <text x="1169" y="1188" class="pin-desc" fill="#94a3b8">SPK DIN (I2S1 Data In)</text>
+      <line x1="1073" y1="1175" x2="1153" y2="1175" stroke="#3b82f6" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="1153" y="1215" width="255" height="46" rx="8" fill="#083344" stroke="#06b6d4" stroke-width="1.6"/>
+      <text x="1169" y="1235" class="pin-title" fill="#06b6d4">GPIO 11</text>
+      <text x="1169" y="1251" class="pin-desc" fill="#94a3b8">MOT IN1 (Roda L+ PWM)</text>
+      <line x1="1073" y1="1238" x2="1153" y2="1238" stroke="#06b6d4" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="1153" y="1278" width="255" height="46" rx="8" fill="#082f49" stroke="#0ea5e9" stroke-width="1.6"/>
+      <text x="1169" y="1298" class="pin-title" fill="#0ea5e9">GPIO 12</text>
+      <text x="1169" y="1314" class="pin-desc" fill="#94a3b8">MOT IN2 (Roda L- PWM)</text>
+      <line x1="1073" y1="1301" x2="1153" y2="1301" stroke="#0ea5e9" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="1153" y="1341" width="255" height="46" rx="8" fill="#2e1065" stroke="#8b5cf6" stroke-width="1.6"/>
+      <text x="1169" y="1361" class="pin-title" fill="#8b5cf6">GPIO 13</text>
+      <text x="1169" y="1377" class="pin-desc" fill="#94a3b8">MOT IN4 (Roda R- PWM)</text>
+      <line x1="1073" y1="1364" x2="1153" y2="1364" stroke="#8b5cf6" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="1153" y="1404" width="255" height="46" rx="8" fill="#1e1b4b" stroke="#6366f1" stroke-width="1.6"/>
+      <text x="1169" y="1424" class="pin-title" fill="#6366f1">GPIO 14</text>
+      <text x="1169" y="1440" class="pin-desc" fill="#94a3b8">MOT IN3 (Roda R+ PWM)</text>
+      <line x1="1073" y1="1427" x2="1153" y2="1427" stroke="#6366f1" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="1153" y="1467" width="255" height="46" rx="8" fill="#4c0519" stroke="#f43f5e" stroke-width="1.6"/>
+      <text x="1169" y="1487" class="pin-title" fill="#f43f5e">5Vin</text>
+      <text x="1169" y="1503" class="pin-desc" fill="#94a3b8">5.0V Boost (MH-CD42)</text>
+      <line x1="1073" y1="1490" x2="1153" y2="1490" stroke="#f43f5e" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+    <g>
+      <rect x="1153" y="1530" width="255" height="46" rx="8" fill="#022c22" stroke="#10b981" stroke-width="1.6"/>
+      <text x="1169" y="1550" class="pin-title" fill="#10b981">GND</text>
+      <text x="1169" y="1566" class="pin-desc" fill="#94a3b8">Common GND (Bawah)</text>
+      <line x1="1073" y1="1553" x2="1153" y2="1553" stroke="#10b981" stroke-width="1.8" stroke-dasharray="3,3" opacity="0.7"/>
+    </g>
+    
+
+<g filter="url(#shadow)">
+  <rect x="502" y="206" width="509" height="48" rx="8" fill="#881337" stroke="#fb7185" stroke-width="2"/>
+  <text x="756.5" y="196" class="header-tag" fill="#fda4af" text-anchor="middle">🔴 SOKET 8-PIN: LAYAR ST7735 TFT 1.8" (128×160)</text>
+</g>
+
+
+    <circle cx="522" cy="230" r="15" fill="#4c0519" stroke="#ec4899" stroke-width="2"/>
+    <text x="522" y="234" class="comp-pin" fill="#ffffff" text-anchor="middle">VCC</text>
+    
+
+    <circle cx="589" cy="230" r="15" fill="#4c0519" stroke="#10b981" stroke-width="2"/>
+    <text x="589" y="234" class="comp-pin" fill="#ffffff" text-anchor="middle">GND</text>
+    
+
+    <circle cx="656" cy="230" r="15" fill="#4c0519" stroke="#22c55e" stroke-width="2"/>
+    <text x="656" y="234" class="comp-pin" fill="#ffffff" text-anchor="middle">CS</text>
+    
+
+    <circle cx="723" cy="230" r="15" fill="#4c0519" stroke="#f97316" stroke-width="2"/>
+    <text x="723" y="234" class="comp-pin" fill="#ffffff" text-anchor="middle">RST</text>
+    
+
+    <circle cx="790" cy="230" r="15" fill="#4c0519" stroke="#eab308" stroke-width="2"/>
+    <text x="790" y="234" class="comp-pin" fill="#ffffff" text-anchor="middle">A0</text>
+    
+
+    <circle cx="857" cy="230" r="15" fill="#4c0519" stroke="#3b82f6" stroke-width="2"/>
+    <text x="857" y="234" class="comp-pin" fill="#ffffff" text-anchor="middle">SDA</text>
+    
+
+    <circle cx="924" cy="230" r="15" fill="#4c0519" stroke="#a855f7" stroke-width="2"/>
+    <text x="924" y="234" class="comp-pin" fill="#ffffff" text-anchor="middle">SCK</text>
+    
+
+    <circle cx="991" cy="230" r="15" fill="#4c0519" stroke="#ec4899" stroke-width="2"/>
+    <text x="991" y="234" class="comp-pin" fill="#ffffff" text-anchor="middle">LED</text>
+    
+
+<g filter="url(#shadow)">
+  <circle cx="756.5" cy="702.5" r="78" fill="#18181b" stroke="#eab308" stroke-width="3"/>
+  <circle cx="756.5" cy="702.5" r="32" fill="#27272a" stroke="#71717a" stroke-width="1.5"/>
+  <text x="756.5" y="656.5" class="header-tag" fill="#fef08a" text-anchor="middle">🎙️ INMP441</text>
+  <text x="756.5" y="707.5" font-family="sans-serif" font-size="11" font-weight="700" fill="#a1a1aa" text-anchor="middle">MEMS MIC</text>
+  <text x="756.5" y="748.5" font-family="sans-serif" font-size="10" font-weight="700" fill="#eab308" text-anchor="middle">I2S0 (RX)</text>
+</g>
+
+
+    <circle cx="656" cy="608" r="12" fill="#27272a" stroke="#06b6d4" stroke-width="2"/>
+    <text x="656" y="612" class="comp-pin" fill="#f4f4f5" text-anchor="middle">SD</text>
+    
+
+    <circle cx="656" cy="671" r="12" fill="#27272a" stroke="#ec4899" stroke-width="2"/>
+    <text x="656" y="675" class="comp-pin" fill="#f4f4f5" text-anchor="middle">VDD</text>
+    
+
+    <circle cx="656" cy="734" r="12" fill="#27272a" stroke="#10b981" stroke-width="2"/>
+    <text x="656" y="738" class="comp-pin" fill="#f4f4f5" text-anchor="middle">GND</text>
+    
+
+    <circle cx="857" cy="608" r="12" fill="#27272a" stroke="#10b981" stroke-width="2"/>
+    <text x="857" y="612" class="comp-pin" fill="#f4f4f5" text-anchor="middle">L/R</text>
+    
+
+    <circle cx="857" cy="671" r="12" fill="#27272a" stroke="#eab308" stroke-width="2"/>
+    <text x="857" y="675" class="comp-pin" fill="#f4f4f5" text-anchor="middle">WS</text>
+    
+
+    <circle cx="857" cy="734" r="12" fill="#27272a" stroke="#a855f7" stroke-width="2"/>
+    <text x="857" y="738" class="comp-pin" fill="#f4f4f5" text-anchor="middle">SCK</text>
+    
+
+<g filter="url(#shadow)">
+  <rect x="562.2" y="891.5" width="415.40000000000003" height="302.4" rx="14" fill="#3b0764" stroke="#a855f7" stroke-width="2.5"/>
+  <text x="769.9000000000001" y="921.5" class="header-tag" fill="#e9d5ff" text-anchor="middle">🔊 MAX98357A (TERBALIK: LRC KIRI ➔ VIN KANAN)</text>
+  <rect x="612.2" y="937.5" width="70" height="30" rx="6" fill="#1e1b4b" stroke="#818cf8" stroke-width="1.5"/>
+  <text x="647.2" y="957.5" class="comp-pin" fill="#ffffff" text-anchor="middle">SPK -</text>
+  <rect x="857.6000000000001" y="937.5" width="70" height="30" rx="6" fill="#1e1b4b" stroke="#818cf8" stroke-width="1.5"/>
+  <text x="892.6000000000001" y="957.5" class="comp-pin" fill="#ffffff" text-anchor="middle">SPK +</text>
+  <text x="769.9000000000001" y="989.5" font-family="sans-serif" font-size="10.5" font-weight="700" fill="#c084fc" text-anchor="middle">⚠️ BTL: SPK- JANGAN ke GND! Langsung ke Speaker</text>
+  <text x="769.9000000000001" y="1007.5" font-family="sans-serif" font-size="10" font-weight="700" fill="#93c5fd" text-anchor="middle">SD &amp; GAIN: Biarkan KOSONG (Default Aktif 9dB Stereo-Mix)</text>
+</g>
+
+
+    <circle cx="589" cy="1112" r="13" fill="#2e1065" stroke="#eab308" stroke-width="2"/>
+    <text x="589" y="1116" class="comp-pin" fill="#ffffff" text-anchor="middle">LRC</text>
+    
+
+    <circle cx="656" cy="1112" r="13" fill="#2e1065" stroke="#a855f7" stroke-width="2"/>
+    <text x="656" y="1116" class="comp-pin" fill="#ffffff" text-anchor="middle">BCLK</text>
+    
+
+    <circle cx="723" cy="1112" r="13" fill="#2e1065" stroke="#3b82f6" stroke-width="2"/>
+    <text x="723" y="1116" class="comp-pin" fill="#ffffff" text-anchor="middle">DIN</text>
+    
+
+    <circle cx="790" cy="1112" r="13" fill="#2e1065" stroke="#64748b" stroke-width="2"/>
+    <text x="790" y="1116" class="comp-pin" fill="#ffffff" text-anchor="middle">GAIN</text>
+    
+
+    <circle cx="857" cy="1112" r="13" fill="#2e1065" stroke="#64748b" stroke-width="2"/>
+    <text x="857" y="1116" class="comp-pin" fill="#ffffff" text-anchor="middle">SD</text>
+    
+
+    <circle cx="924" cy="1112" r="13" fill="#2e1065" stroke="#10b981" stroke-width="2"/>
+    <text x="924" y="1116" class="comp-pin" fill="#ffffff" text-anchor="middle">GND</text>
+    
+
+    <circle cx="991" cy="1112" r="13" fill="#2e1065" stroke="#f43f5e" stroke-width="2"/>
+    <text x="991" y="1116" class="comp-pin" fill="#ffffff" text-anchor="middle">Vin</text>
+    
+
+<g filter="url(#shadow)">
+  <rect x="575.6" y="1256.9" width="361.8" height="327.6" rx="14" fill="#111827" stroke="#38bdf8" stroke-width="2.5"/>
+  <text x="756.5" y="1288.9" class="header-tag" fill="#7dd3fc" text-anchor="middle">⚙️ DRV8833 DUAL H-BRIDGE (DIPUTAR 180°)</text>
+  <rect x="610.6" y="1539.5" width="165" height="28" rx="6" fill="#14532d" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="692.6" y="1558.5" font-family="sans-serif" font-size="10" font-weight="800" fill="#86efac" text-anchor="middle">✓ JUMPER J1 DISOLDER</text>
+</g>
+
+
+    <circle cx="589" cy="1238" r="12" fill="#0f172a" stroke="#64748b" stroke-width="2"/>
+    <text x="589" y="1242" class="comp-pin" fill="#ffffff" text-anchor="middle">ULT</text>
+    
+
+    <circle cx="589" cy="1301" r="12" fill="#0f172a" stroke="#f59e0b" stroke-width="2"/>
+    <text x="589" y="1305" class="comp-pin" fill="#ffffff" text-anchor="middle">OUT4</text>
+    
+
+    <circle cx="589" cy="1364" r="12" fill="#0f172a" stroke="#f59e0b" stroke-width="2"/>
+    <text x="589" y="1368" class="comp-pin" fill="#ffffff" text-anchor="middle">OUT3</text>
+    
+
+    <circle cx="589" cy="1427" r="12" fill="#0f172a" stroke="#38bdf8" stroke-width="2"/>
+    <text x="589" y="1431" class="comp-pin" fill="#ffffff" text-anchor="middle">OUT2</text>
+    
+
+    <circle cx="589" cy="1490" r="12" fill="#0f172a" stroke="#38bdf8" stroke-width="2"/>
+    <text x="589" y="1494" class="comp-pin" fill="#ffffff" text-anchor="middle">OUT1</text>
+    
+
+    <circle cx="589" cy="1553" r="12" fill="#0f172a" stroke="#22c55e" stroke-width="2"/>
+    <text x="589" y="1557" class="comp-pin" fill="#ffffff" text-anchor="middle">EEP</text>
+    
+
+    <circle cx="924" cy="1238" r="12" fill="#0f172a" stroke="#06b6d4" stroke-width="2"/>
+    <text x="924" y="1242" class="comp-pin" fill="#ffffff" text-anchor="middle">IN1</text>
+    
+
+    <circle cx="924" cy="1301" r="12" fill="#0f172a" stroke="#0ea5e9" stroke-width="2"/>
+    <text x="924" y="1305" class="comp-pin" fill="#ffffff" text-anchor="middle">IN2</text>
+    
+
+    <circle cx="924" cy="1364" r="12" fill="#0f172a" stroke="#f43f5e" stroke-width="2"/>
+    <text x="924" y="1368" class="comp-pin" fill="#ffffff" text-anchor="middle">VCC</text>
+    
+
+    <circle cx="924" cy="1427" r="12" fill="#0f172a" stroke="#10b981" stroke-width="2"/>
+    <text x="924" y="1431" class="comp-pin" fill="#ffffff" text-anchor="middle">GND</text>
+    
+
+    <circle cx="924" cy="1490" r="12" fill="#0f172a" stroke="#6366f1" stroke-width="2"/>
+    <text x="924" y="1494" class="comp-pin" fill="#ffffff" text-anchor="middle">IN3</text>
+    
+
+    <circle cx="924" cy="1553" r="12" fill="#0f172a" stroke="#8b5cf6" stroke-width="2"/>
+    <text x="924" y="1557" class="comp-pin" fill="#ffffff" text-anchor="middle">IN4</text>
+    
+<polyline points="656,230 656,419 455,419" fill="none" stroke="#22c55e" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" /><circle cx="656" cy="230" r="4.25" fill="#22c55e"/><circle cx="656" cy="419" r="4.25" fill="#22c55e"/><circle cx="455" cy="419" r="4.25" fill="#22c55e"/>
+<polyline points="723,230 723,482 455,482" fill="none" stroke="#f97316" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" /><circle cx="723" cy="230" r="4.25" fill="#f97316"/><circle cx="723" cy="482" r="4.25" fill="#f97316"/><circle cx="455" cy="482" r="4.25" fill="#f97316"/>
+<polyline points="790,230 790,545 455,545" fill="none" stroke="#eab308" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" /><circle cx="790" cy="230" r="4.25" fill="#eab308"/><circle cx="790" cy="545" r="4.25" fill="#eab308"/><circle cx="455" cy="545" r="4.25" fill="#eab308"/>
+<polyline points="857,230 857,419 1058,419" fill="none" stroke="#3b82f6" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" /><circle cx="857" cy="230" r="4.75" fill="#3b82f6"/><circle cx="857" cy="419" r="4.75" fill="#3b82f6"/><circle cx="1058" cy="419" r="4.75" fill="#3b82f6"/>
+<polyline points="924,230 924,482 1058,482" fill="none" stroke="#a855f7" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" /><circle cx="924" cy="230" r="4.75" fill="#a855f7"/><circle cx="924" cy="482" r="4.75" fill="#a855f7"/><circle cx="1058" cy="482" r="4.75" fill="#a855f7"/>
+<polyline points="991,230 1058,230" fill="none" stroke="#ec4899" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" /><circle cx="991" cy="230" r="5.0" fill="#ec4899"/><circle cx="1058" cy="230" r="5.0" fill="#ec4899"/>
+<polyline points="589,230 455,230" fill="none" stroke="#10b981" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" /><circle cx="589" cy="230" r="4.5" fill="#10b981"/><circle cx="455" cy="230" r="4.5" fill="#10b981"/>
+<polyline points="522,230 522,182 1058,182 1058,293" fill="none" stroke="#ec4899" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6,3"/><circle cx="522" cy="230" r="4.0" fill="#ec4899"/><circle cx="522" cy="182" r="4.0" fill="#ec4899"/><circle cx="1058" cy="182" r="4.0" fill="#ec4899"/><circle cx="1058" cy="293" r="4.0" fill="#ec4899"/>
+<polyline points="656,608 455,608" fill="none" stroke="#06b6d4" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" /><circle cx="656" cy="608" r="4.5" fill="#06b6d4"/><circle cx="455" cy="608" r="4.5" fill="#06b6d4"/>
+<polyline points="857,671 1058,671" fill="none" stroke="#eab308" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" /><circle cx="857" cy="671" r="4.5" fill="#eab308"/><circle cx="1058" cy="671" r="4.5" fill="#eab308"/>
+<polyline points="857,734 1058,734" fill="none" stroke="#a855f7" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" /><circle cx="857" cy="734" r="4.5" fill="#a855f7"/><circle cx="1058" cy="734" r="4.5" fill="#a855f7"/>
+<polyline points="857,608 857,576.5 656,576.5 656,734" fill="none" stroke="#10b981" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4,3"/><circle cx="857" cy="608" r="3.75" fill="#10b981"/><circle cx="857" cy="576.5" r="3.75" fill="#10b981"/><circle cx="656" cy="576.5" r="3.75" fill="#10b981"/><circle cx="656" cy="734" r="3.75" fill="#10b981"/>
+<polyline points="589,1112 535.4,1112 535.4,828.5 1011.1,828.5 1011.1,923 1058,923" fill="none" stroke="#eab308" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" /><circle cx="589" cy="1112" r="4.25" fill="#eab308"/><circle cx="535.4" cy="1112" r="4.25" fill="#eab308"/><circle cx="535.4" cy="828.5" r="4.25" fill="#eab308"/><circle cx="1011.1" cy="828.5" r="4.25" fill="#eab308"/><circle cx="1011.1" cy="923" r="4.25" fill="#eab308"/><circle cx="1058" cy="923" r="4.25" fill="#eab308"/>
+<polyline points="656,1112 656,1146.65 1024.5,1146.65 1024.5,1112 1058,1112" fill="none" stroke="#a855f7" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" /><circle cx="656" cy="1112" r="4.25" fill="#a855f7"/><circle cx="656" cy="1146.65" r="4.25" fill="#a855f7"/><circle cx="1024.5" cy="1146.65" r="4.25" fill="#a855f7"/><circle cx="1024.5" cy="1112" r="4.25" fill="#a855f7"/><circle cx="1058" cy="1112" r="4.25" fill="#a855f7"/>
+<polyline points="723,1112 723,1175 1058,1175" fill="none" stroke="#3b82f6" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" /><circle cx="723" cy="1112" r="4.25" fill="#3b82f6"/><circle cx="723" cy="1175" r="4.25" fill="#3b82f6"/><circle cx="1058" cy="1175" r="4.25" fill="#3b82f6"/>
+<polyline points="924,1112 883.8,1112 883.8,1427 924,1427 924,1553 1058,1553" fill="none" stroke="#10b981" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6,3"/><circle cx="924" cy="1112" r="4.25" fill="#10b981"/><circle cx="883.8" cy="1112" r="4.25" fill="#10b981"/><circle cx="883.8" cy="1427" r="4.25" fill="#10b981"/><circle cx="924" cy="1427" r="4.25" fill="#10b981"/><circle cx="924" cy="1553" r="4.25" fill="#10b981"/><circle cx="1058" cy="1553" r="4.25" fill="#10b981"/>
+<polyline points="924,1238 1058,1238" fill="none" stroke="#06b6d4" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" /><circle cx="924" cy="1238" r="4.5" fill="#06b6d4"/><circle cx="1058" cy="1238" r="4.5" fill="#06b6d4"/>
+<polyline points="924,1301 1058,1301" fill="none" stroke="#0ea5e9" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" /><circle cx="924" cy="1301" r="4.5" fill="#0ea5e9"/><circle cx="1058" cy="1301" r="4.5" fill="#0ea5e9"/>
+<polyline points="924,1490 986,1490 986,1427 1058,1427" fill="none" stroke="#6366f1" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" /><circle cx="924" cy="1490" r="4.25" fill="#6366f1"/><circle cx="986" cy="1490" r="4.25" fill="#6366f1"/><circle cx="986" cy="1427" r="4.25" fill="#6366f1"/><circle cx="1058" cy="1427" r="4.25" fill="#6366f1"/>
+<polyline points="924,1553 1009,1553 1009,1364 1058,1364" fill="none" stroke="#8b5cf6" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" /><circle cx="924" cy="1553" r="4.25" fill="#8b5cf6"/><circle cx="1009" cy="1553" r="4.25" fill="#8b5cf6"/><circle cx="1009" cy="1364" r="4.25" fill="#8b5cf6"/><circle cx="1058" cy="1364" r="4.25" fill="#8b5cf6"/>
+<polyline points="1058,1490 924,1364 964.2,1364 964.2,1112 991,1112" fill="none" stroke="#f43f5e" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="8,4"/><circle cx="1058" cy="1490" r="4.5" fill="#f43f5e"/><circle cx="924" cy="1364" r="4.5" fill="#f43f5e"/><circle cx="964.2" cy="1364" r="4.5" fill="#f43f5e"/><circle cx="964.2" cy="1112" r="4.5" fill="#f43f5e"/><circle cx="991" cy="1112" r="4.5" fill="#f43f5e"/>
+
+<g filter="url(#shadow)">
+  <rect x="50" y="1671" width="1420" height="240" rx="14" fill="#1e293b" stroke="#334155" stroke-width="2"/>
+  <text x="80" y="1707" class="title" font-size="20">🔋 DISTRIBUSI DAYA MH-CD42 (IP5306) &amp; RINGKASAN AUDIT KELISTRIKAN</text>
+
+  <!-- Power block -->
+  <rect x="80" y="1729" width="400" height="158" rx="10" fill="#0f172a" stroke="#f43f5e" stroke-width="1.8"/>
+  <text x="100" y="1759" class="legend-title" fill="#fca5a5">⚡ MODUL CHARGER / STEP-UP 5V</text>
+  <text x="100" y="1785" class="legend-text">• BAT+ &amp; BAT- ➔ Baterai Li-Ion 3.7V (18650)</text>
+  <text x="100" y="1808" class="legend-text">• VOUT+ (5.0V) ➔ Pin 5Vin ESP32, VCC Motor, Vin Amp</text>
+  <text x="100" y="1831" class="legend-text">• VOUT- (GND) ➔ Common Ground (Rel Bawah R21/R22)</text>
+  <text x="100" y="1854" class="legend-text" fill="#4ade80">✓ IP5306 Bebas Auto-Sleep: Beban ESP32 ~120mA stabil</text>
+
+  <!-- Audit block -->
+  <rect x="505" y="1729" width="470" height="158" rx="10" fill="#0f172a" stroke="#10b981" stroke-width="1.8"/>
+  <text x="525" y="1759" class="legend-title" fill="#6ee7b7">🛡️ AUDIT INTEGRITAS SIGNAL &amp; PIN CONSTRAINT</text>
+  <text x="525" y="1785" class="legend-text">• Sinyal Terpasang: LCD SDA = GPIO 4 | LCD SCK = GPIO 5</text>
+  <text x="525" y="1808" class="legend-text">• MAX98357A: Vin ke 5V | GND ke GND | SD &amp; GAIN (Open)</text>
+  <text x="525" y="1831" class="legend-text">• Strapping Safe: GPIO 0, 3, 45, 46 dibiarkan KOSONG (0 load)</text>
+  <text x="525" y="1854" class="legend-text">• PSRAM Safe: GPIO 35, 36, 37 tidak tersentuh (anti-crash)</text>
+
+  <!-- Wiring Color Legend -->
+  <rect x="1000" y="1729" width="445" height="158" rx="10" fill="#0f172a" stroke="#38bdf8" stroke-width="1.8"/>
+  <text x="1020" y="1759" class="legend-title" fill="#7dd3fc">🎨 KODE WARNA JALUR KABEL</text>
+  <circle cx="1030" cy="1783" r="5" fill="#f43f5e"/><text x="1045" y="1787" class="legend-text">Merah: 5.0V Boost (Motor, Amp, ESP 5Vin)</text>
+  <circle cx="1030" cy="1806" r="5" fill="#ec4899"/><text x="1045" y="1810" class="legend-text">Pink: 3.3V LDO Bersih (LCD &amp; Mic)</text>
+  <circle cx="1030" cy="1829" r="5" fill="#10b981"/><text x="1045" y="1833" class="legend-text">Hijau: Common GND (Bintang ground bersama)</text>
+  <circle cx="1030" cy="1852" r="5" fill="#3b82f6"/><text x="1045" y="1856" class="legend-text">Biru/Kuning/Ungu: Sinyal Digital SPI, I2S &amp; PWM</text>
+</g>
+
+</svg>
